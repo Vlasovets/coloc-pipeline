@@ -1,3 +1,4 @@
+# https://github.com/Vlasovets/coloc-pipeline.git
 # Change allele2 to be also a SNP (%in% c("A", "T", "C", "G"))
 # Use CPTID instead of SNP
 
