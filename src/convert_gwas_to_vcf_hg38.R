@@ -18,15 +18,45 @@ library(coloc)
 library(dplyr)
 library(parallel)
 
+cat("\n")
+cat("========================================\n")
+cat("GWAS VCF Conversion Pipeline\n")
+cat("========================================\n")
+cat("Date:", format(Sys.time(), "%Y-%m-%d %H:%M:%S"), "\n")
+cat("Traits to process: KNEE, TKR, ALLOA\n")
+cat("========================================\n\n")
+
+cat("Step 1: Loading variant annotation file...\n")
 variant_ann <- fread("/lustre/groups/itg/teams/zeggini/projects/fungen-oa/analyses/Ana_coloc_mr/coloc/variant_ann_hg38.txt.gz")
+cat("✓ Loaded", nrow(variant_ann), "variants\n\n")
+
+cat("Step 2: Filtering variants...\n")
 variant_ann$chr <- as.integer(variant_ann$chr)
+original_count <- nrow(variant_ann)
 variant_ann <- variant_ann[!is.na(variant_ann$chr) & nchar(variant_ann$ref)==1 & nchar(variant_ann$alt)==1,]
+filtered_count <- nrow(variant_ann)
+cat("✓ Retained", filtered_count, "of", original_count, "variants after filtering\n\n")
 
 for(trait in c("KNEE", "TKR", "ALLOA")){
+  
+  cat("========================================\n")
+  cat("Processing trait:", trait, "\n")
+  cat("========================================\n")
+  
   ncases <- ifelse(trait=="KNEE", 172256, ifelse(trait=="TKR", 48161, 489952))
   ncontrols <- ifelse(trait=="KNEE", 1144244, ifelse(trait=="TKR", 958463, 1471094))
   GWAS_n <- c(ncases, ncontrols)
+  
+  cat("Sample size:\n")
+  cat("  - Cases:", formatC(ncases, format="d", big.mark=","), "\n")
+  cat("  - Controls:", formatC(ncontrols, format="d", big.mark=","), "\n")
+  cat("  - Total:", formatC(sum(GWAS_n), format="d", big.mark=","), "\n\n")
+  
   GWASfile <- paste0("/lustre/groups/itg/teams/zeggini/projects/GO2/GO2SummStats/ALL.MAIN/GO.FILTER.GW.final.meta.results.ALL.", trait, ".FULL.MAFless0.01.Nupdated.txt.gz")
+  
+  cat("Input file:", basename(GWASfile), "\n")
+  
+  cat("Converting to VCF format...\n")
   make_vcf(GWASfile=GWASfile,
            chrom="CHR",
            pos="POS",
@@ -44,4 +74,14 @@ for(trait in c("KNEE", "TKR", "ALLOA")){
            variant_ann=variant_ann, # reference file to map the missing values
            # output=paste0("/lustre/groups/itg/teams/zeggini/projects/fungen-oa/analyses/Ana_coloc_mr/GO2_sumstats/GO2_b38_", trait, "_ody_cptid.vcf"))
            output=paste0("/lustre/groups/itg/teams/zeggini/projects/fungen-oa/analyses/Ana_coloc_mr/GO2_sumstats/GO2_b38_", trait, "_ana_new.vcf"))
+  
+  cat("✓ Completed conversion for", trait, "\n\n")
 }
+
+cat("========================================\n")
+cat("Pipeline completed successfully!\n")
+cat("========================================\n")
+cat("All 3 traits processed\n")
+cat("Output directory: /lustre/groups/itg/teams/zeggini/projects/fungen-oa/analyses/Ana_coloc_mr/GO2_sumstats/\n")
+cat("Finished at:", format(Sys.time(), "%Y-%m-%d %H:%M:%S"), "\n")
+cat("========================================\n")
