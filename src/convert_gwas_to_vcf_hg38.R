@@ -37,6 +37,81 @@ variant_ann <- variant_ann[!is.na(variant_ann$chr) & nchar(variant_ann$ref)==1 &
 filtered_count <- nrow(variant_ann)
 cat("✓ Retained", filtered_count, "of", original_count, "variants after filtering\n\n")
 
+
+#' ============================================================================
+#' INPUT VALIDATION
+#' ============================================================================
+
+#' Validate required files and directories exist before processing
+#' 
+#' @description Checks that all input files and output directories are accessible
+#' @return NULL (stops execution with error message if validation fails)
+
+validate_inputs <- function(VARIANT_ANNOTATION_FILE ,
+                            GWAS_SUMSTATS_DIR,
+                            OUTPUT_PATH,
+                            HELPER_SCRIPT = "scripts/Coloc_helper_functions.R") {
+
+  # Check variant annotation file exists
+  if (!file.exists(VARIANT_ANNOTATION_FILE)) {
+    stop("ERROR: Variant annotation file not found: ", VARIANT_ANNOTATION_FILE)
+  }
+  message("✓ Variant annotation file found")
+
+  # Check GWAS summary statistics directory exists
+  if (!dir.exists(GWAS_SUMSTATS_DIR)) {
+    stop("ERROR: GWAS summary statistics directory not found: ", GWAS_SUMSTATS_DIR)
+  }
+  message("✓ GWAS summary statistics directory found")
+
+  # Check output directory exists (create if not)
+  if (!dir.exists(OUTPUT_PATH)) {
+    message("Creating output directory: ", OUTPUT_PATH)
+    dir.create(OUTPUT_PATH, recursive = TRUE)
+  }
+  message("✓ Output directory ready")
+
+  # Check helper functions script exists, and source it
+  if (!file.exists(HELPER_SCRIPT)) {
+    stop("ERROR: Helper functions script not found: ", HELPER_SCRIPT)
+  }
+  source(HELPER_SCRIPT)
+  message("✓ Helper functions script found")
+
+  # Validate required packages are installed
+  required_packages <- c("data.table", "VariantAnnotation", "gwasvcf", 
+                        "GenomicRanges", "rtracklayer", "coloc", "dplyr", "parallel")
+  missing_packages <- required_packages[!sapply(required_packages, requireNamespace, quietly = TRUE)]
+
+  if (length(missing_packages) > 0) {
+    stop("ERROR: Missing required packages: ", paste(missing_packages, collapse = ", "))
+  }
+  message("✓ All required packages available")
+
+  message("\n--- All validation checks passed ---\n")
+}
+
+# Run validation before processing
+validate_inputs(VARIANT_ANNOTATION_FILE  ,
+                            GWAS_SUMSTATS_DIR,
+                            OUTPUT_PATH,
+                            HELPER_SCRIPT = "scripts/Coloc_helper_functions.R")
+
+# =================================================
+# Load the reference annotation
+# =================================================
+
+# Load variant annotation with error handling
+variant_ann <- tryCatch({
+  message("Loading variant annotation file...")
+  fread(VARIANT_ANNOTATION_FILE)
+}, error = function(e) {
+  stop("ERROR: Failed to load variant annotation: ", e$message)
+})
+variant_ann$chr <- as.integer(variant_ann$chr)
+variant_ann <- variant_ann[!is.na(variant_ann$chr) & nchar(variant_ann$ref)==1 & nchar(variant_ann$alt)==1,]
+
+
 for(trait in c("KNEE", "TKR", "ALLOA")){
   
   cat("========================================\n")
