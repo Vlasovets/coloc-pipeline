@@ -1,0 +1,19 @@
+# Ignore local configuration file with sensitive paths
+config.R
+
+# R specific
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+*.Rproj
+
+# Output files
+*.vcf
+*.vcf.gz
+*.tbi
+*.log
+
+# Temporary files
+*~
+.DS_Store
