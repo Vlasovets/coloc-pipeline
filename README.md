@@ -5,7 +5,7 @@ The coloc pipeline requires:
 - A table of GWAS significant independent signals
 - The full molecular QTL summary statisticsfrom in fastQTL/tensoQTL format
 - The result from the permutation analysis from fastQTL/tensoQTL
-- A reference genotype file
+- A reference genotype file.
 
 For Coloc, the following steps are performed:
 - the GWAS summary statistics are converted to a standardised, tabix indexed, VCF file format. This step includes liftover between genome builds.
