@@ -1,0 +1,17 @@
+name: r_coloc
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - r-base=4.3
+  - r-data.table
+  - r-dplyr
+  - r-magrittr
+  - r-r.utils
+  - bioconductor-variantannotation
+  - bioconductor-genomicranges
+  - bioconductor-rtracklayer
+  - r-coloc
+  - r-remotes
+  - r-biocmanager
