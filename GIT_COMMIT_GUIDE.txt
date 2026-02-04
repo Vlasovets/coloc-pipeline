@@ -1,0 +1,130 @@
+=============================================================================
+GIT COMMIT GUIDE - Colocalization Pipeline
+=============================================================================
+
+COMMIT THESE FILES (Pipeline Infrastructure):
+=============================================================================
+
+Core Pipeline Files:
+  ✓ Snakefile                        - Pipeline workflow definition
+  ✓ environment.yml                  - Conda environment specification
+  ✓ envs/r_coloc.yml                - R environment for pipeline rules
+  ✓ submit_pipeline.sh              - SLURM cluster submission script
+  ✓ run_pipeline_local.sh           - Local execution script
+  ✓ check_pipeline_status.sh        - Progress monitoring utility
+
+Configuration (Examples Only):
+  ✓ config.yaml.example             - Template configuration (NO real paths)
+  ✓ config.R.example                - Old config template (legacy)
+
+Documentation:
+  ✓ README.md                       - Main documentation with usage
+  ✓ CHECKPOINT_SYSTEM.md            - Checkpoint system explanation
+  ✓ QUICKSTART.md                   - Quick reference guide
+  ✓ WORKFLOW_DOCUMENTATION.md       - Detailed workflow docs
+  ✓ LICENSE                         - License file
+
+Workflow Scripts (All files in workflow/):
+  ✓ workflow/scripts/1_convert_gwas_to_vcf.R
+  ✓ workflow/scripts/2_find_qtl_gwas_overlaps.R
+  ✓ workflow/scripts/3_run_coloc_abf.R
+  ✓ workflow/scripts/4_run_coloc_susie.R
+  ✓ workflow/scripts/5_postprocess_coloc.R
+  ✓ workflow/scripts/6_generate_plots.R
+  ✓ workflow/scripts/data_loader.R
+  ✓ workflow/scripts/qtl_processor.R
+  ✓ workflow/scripts/coloc_helpers.R
+  ✓ workflow/scripts/slurm_status.py
+
+Reference Code (Original implementations):
+  ✓ src/1_make_GO2_b38_vcf.R
+  ✓ src/1_make_vcf.ipynb
+  ✓ src/2_run_coloc_abf.ipynb
+  ✓ src/3_run_coloc_abf.R
+  ✓ src/4_run_coloc_susie.R
+  ✓ src/5_postprocess_coloc.R
+  ✓ src/Coloc_helper_functions.R
+  ✓ src/README.md
+
+Modified Files:
+  ✓ .gitignore                      - Updated ignore patterns
+  ✓ README.md                       - Updated documentation
+
+
+DO NOT COMMIT (Ignored by .gitignore):
+=============================================================================
+
+User-Specific Configuration:
+  ✗ config.yaml                     - Contains local paths (use .example)
+  ✗ config.R                        - Old config with local paths
+
+Pipeline Outputs:
+  ✗ results/                        - All pipeline outputs
+  ✗ logs/                           - Log files
+  ✗ .snakemake/                     - Snakemake metadata
+
+Data Files (Large):
+  ✗ *.vcf, *.vcf.gz, *.vcf.bgz     - GWAS VCF files
+  ✗ *.tbi                           - Index files
+  ✗ *.parquet                       - QTL data files
+  ✗ *.rda, *.RData                  - R data objects
+
+Temporary/Working Files:
+  ✗ run_stage2.sh                   - Testing script (superseded)
+  ✗ CONTINUE_PIPELINE.md            - Working notes
+  ✗ REFACTORING_SUMMARY.md          - Internal refactoring docs
+  ✗ *.log, *.out, *.err             - Runtime logs
+
+
+GIT COMMANDS TO COMMIT:
+=============================================================================
+
+# 1. Stage all pipeline infrastructure files
+git add Snakefile
+git add environment.yml
+git add envs/
+git add submit_pipeline.sh
+git add run_pipeline_local.sh
+git add check_pipeline_status.sh
+git add workflow/
+git add src/
+
+# 2. Stage configuration examples (not real configs)
+git add config.yaml.example
+
+# 3. Stage documentation
+git add README.md
+git add CHECKPOINT_SYSTEM.md
+git add QUICKSTART.md
+git add WORKFLOW_DOCUMENTATION.md
+
+# 4. Stage updated .gitignore
+git add .gitignore
+
+# 5. Commit everything
+git commit -m "Add complete colocalization pipeline with automatic checkpoints
+
+- Snakemake workflow with 6 stages
+- Automatic checkpoint system for resumable execution
+- Modular R scripts for data loading, QTL processing, and colocalization
+- SLURM cluster integration with resource management
+- Comprehensive documentation and monitoring utilities
+- Original src/ code preserved for reference"
+
+# 6. Push to remote
+git push origin main
+
+
+VERIFICATION:
+=============================================================================
+
+# Check what will be committed
+git status
+
+# Check what's ignored
+git status --ignored
+
+# Preview commit
+git diff --cached
+
+=============================================================================
