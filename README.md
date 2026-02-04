@@ -1,4 +1,4 @@
-Pipelines designed to run two-sample medelian randomization and coloc between GWAS summary statistics and molecular QTL summary statistics generated from fastQTL/tensorQTL.
+Pipeline designed to run coloc.abf and coloc.SuSiE between GWAS summary statistics and molecular QTL summary statistics generated from fastQTL/tensorQTL.
 
 The coloc pipeline requires:
 - The GWAS summary statistics
