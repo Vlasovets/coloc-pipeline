@@ -1,120 +1,40 @@
-#!/usr/bin/env Rscript
-
-#' QTL Processor Module for Colocalization Pipeline
-#'
-#' This module handles QTL-GWAS overlap detection and data preparation:
-#' - Create genomic windows around QTL lead variants
-#' - Find overlaps between QTL and GWAS regions
-#' - Harmonize alleles and create variant IDs
-#' - Filter and prepare data for colocalization
-#'
-#' Refactored from src/3_run_coloc_abf.R with improvements:
-#' - Cleaner separation of concerns
-#' - Better memory management
-#' - Progress tracking and logging
-#' - Reproducible window creation logic
-
-# =============================================================================
-# DEPENDENCIES
-# =============================================================================
-
-suppressPackageStartupMessages({
-  library(data.table)
-  library(dplyr)
-  library(GenomicRanges)
-})
-
-# =============================================================================
-# WINDOW CREATION FUNCTIONS
-# =============================================================================
-
-#' Create genomic windows around GWAS signals
-#'
-#' @param signals data.frame with columns: rsid, chr, position
-#' @param window_size Numeric: window size in base pairs (default 1Mb)
-#' @return list with signals data.frame and GenomicRanges object
-#' @export
-create_gwas_windows <- function(signals, window_size = 1e6) {
-  log_message(sprintf("Creating genomic windows of %d bp around %d GWAS signals", 
-                     window_size, nrow(signals)))
-  
-  # Calculate window coordinates
-  signals$start <- ifelse(signals$position - window_size >= 1, 
-                          signals$position - window_size, 1)
-  signals$end <- signals$position + window_size
-  
-  # Create GenomicRanges object
-  signals_gr <- makeGRangesFromDataFrame(
-    signals,
-    keep.extra.columns = FALSE,
-    ignore.strand = FALSE,
-    seqinfo = NULL,
-    seqnames.field = "chr",
-    start.field = "start",
-    end.field = "end",
-    strand.field = "strand",
-    starts.in.df.are.0based = FALSE
-  )
-  
-  log_message(sprintf("Created %d genomic windows", length(signals_gr)))
-  
-  return(list(signals = signals, signals_gr = signals_gr))
-}
-
-#' Create genomic windows around QTL lead variants
-#'
-#' @param qtl_data data.table with QTL permutation results
-#' @param window_size Numeric: window size in base pairs
-#' @return data.table with window coordinates added
-#' @export
-create_qtl_windows <- function(qtl_data, window_size = 1e6) {
-  log_message(sprintf("Creating %d bp windows around %d QTL lead variants", 
-                     window_size, nrow(qtl_data)))
-  
-  qtl_data[, mqtl_start_coord := pmax(1, pos - window_size)]
-  qtl_data[, mqtl_end_coord := pos + window_size]
-  
-  log_message("QTL windows created")
-  
-  return(qtl_data)
-}
-
-# =============================================================================
-# OVERLAP DETECTION
-# =============================================================================
-
-#' Find overlapping regions between QTL and GWAS windows
-#'
-#' @param qtl_windows data.table with QTL windows (from create_qtl_windows)
-#' @param gwas_signals data.frame with GWAS signals and windows
-#' @return data.table with overlapping QTL-GWAS pairs
-#' @export
+find_qtl_gwas_overlaps <- function(qtl_windows, gwas_signals) {
+  log_message("Finding overlaps between QTL and GWAS windows...")
 find_qtl_gwas_overlaps <- function(qtl_windows, gwas_signals) {
   log_message("Finding overlaps between QTL and GWAS windows...")
   
-  # Convert to data.table if needed
-  qtl_windows <- copy(as.data.table(qtl_windows))
-  gwas_signals <- copy(as.data.table(gwas_signals))
+  # Create fresh data.tables from scratch
+  qtl_dt <- data.table(
+    chr = as.numeric(as.character(qtl_windows$chr)),
+    mqtl_start_coord = qtl_windows$mqtl_start_coord,
+    mqtl_end_coord = qtl_windows$mqtl_end_coord,
+    pos = qtl_windows$pos,
+    gene_id = qtl_windows$gene_id,
+    qval = qtl_windows$qval
+  )
   
-  # Ensure chromosome is numeric
-  gwas_signals[, chr := as.numeric(as.character(chr))]
-  qtl_windows[, chr := as.numeric(as.character(chr))]
+  gwas_dt <- data.table(
+    chr = as.numeric(as.character(gwas_signals$chr)),
+    position = gwas_signals$position,
+    position2 = gwas_signals$position,
+    rsid = gwas_signals$rsid,
+    Loci = gwas_signals$Loci
+  )
   
-  # Create position2 column for foverlaps
-  gwas_signals[, position2 := gwas_signals$position]
-  
-  # Set keys for fast overlap join
-  setkeyv(qtl_windows, c("chr", "mqtl_start_coord", "mqtl_end_coord"))
-  setkeyv(gwas_signals, c("chr", "position", "position2"))
+  # Set keys
+  setkeyv(qtl_dt, c("chr", "mqtl_start_coord", "mqtl_end_coord"))
+  setkeyv(gwas_dt, c("chr", "position", "position2"))
   
   # Find overlaps
-  overlaps <- foverlaps(qtl_windows, gwas_signals, type = "any", 
+  overlaps <- foverlaps(qtl_dt, gwas_dt, type = "any", 
                         nomatch = NULL, mult = "all")
   
   log_message(sprintf("Found %d QTL-GWAS overlapping regions", nrow(overlaps)))
   log_message(sprintf("  Unique QTL genes: %d", length(unique(overlaps$gene_id))))
   log_message(sprintf("  Unique GWAS signals: %d", length(unique(overlaps$rsid))))
   
+  return(overlaps)
+}
   return(overlaps)
 }
 
@@ -328,13 +248,3 @@ filter_by_distance <- function(overlaps, max_distance = 1e6) {
 # CLI INTERFACE
 # =============================================================================
 
-if (sys.nframe() == 0) {
-  log_message("QTL processor module loaded successfully")
-  log_message("Available functions:")
-  log_message("  - create_gwas_windows()")
-  log_message("  - create_qtl_windows()")
-  log_message("  - find_qtl_gwas_overlaps()")
-  log_message("  - harmonize_qtl_gwas()")
-  log_message("  - prepare_coloc_qtl()")
-  log_message("  - prepare_coloc_gwas()")
-}
