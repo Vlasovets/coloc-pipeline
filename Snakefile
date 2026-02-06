@@ -17,7 +17,7 @@ rule all:
     input:
         # Stage 1: GWAS VCF conversion
         expand(
-            "{output_dir}/gwas_vcf/{trait}_hg38.vcf.gz",
+            "{output_dir}/gwas_vcf/{trait}_hg38.vcf.bgz",
             output_dir=config["output_dir"],
             trait=TRAITS
         ),
@@ -51,8 +51,8 @@ rule convert_gwas_to_vcf:
         ),
         variant_ann=config["variant_annotation_file"]
     output:
-        vcf="{output_dir}/gwas_vcf/{trait}_hg38.vcf.gz",
-        index="{output_dir}/gwas_vcf/{trait}_hg38.vcf.gz.tbi"
+        vcf="{output_dir}/gwas_vcf/{trait}_hg38.vcf.bgz",
+        index="{output_dir}/gwas_vcf/{trait}_hg38.vcf.bgz.tbi"
     params:
         n_cases=lambda wildcards: config["sample_sizes"][wildcards.trait]["cases"],
         n_controls=lambda wildcards: config["sample_sizes"][wildcards.trait]["controls"],
@@ -74,7 +74,7 @@ rule convert_gwas_to_vcf:
 # Rule 2: Find QTL-GWAS overlaps
 rule find_overlaps:
     input:
-        gwas_vcf="{output_dir}/gwas_vcf/{trait}_hg38.vcf.gz",
+        gwas_vcf="{output_dir}/gwas_vcf/{trait}_hg38.vcf.bgz",
         qtl_perm=lambda wildcards: config["qtl_permutation_files"][wildcards.tissue],
         signals=config["gwas_signals_file"]
     output:
@@ -99,7 +99,7 @@ rule run_coloc_abf:
     input:
         overlaps="{output_dir}/overlaps/{trait}.{tissue}.overlaps.rda",
         qtl_data="{output_dir}/overlaps/{trait}.{tissue}.qtl_subset.txt",
-        gwas_vcf="{output_dir}/gwas_vcf/{trait}_hg38.vcf.gz"
+        gwas_vcf="{output_dir}/gwas_vcf/{trait}_hg38.vcf.bgz"
     output:
         results="{output_dir}/coloc_abf/{trait}.{tissue}.colocABF_results.txt",
         sumstats_dir=directory("{output_dir}/coloc_abf/{trait}.{tissue}.sumstats")
@@ -169,7 +169,7 @@ rule aggregate_results:
 rule generate_plots:
     input:
         results="{output_dir}/results/{trait}_coloc_aggregated.txt",
-        gwas_vcf="{output_dir}/gwas_vcf/{trait}_hg38.vcf.gz"
+        gwas_vcf="{output_dir}/gwas_vcf/{trait}_hg38.vcf.bgz"
     output:
         plots=directory("{output_dir}/plots/{trait}")
     params:
