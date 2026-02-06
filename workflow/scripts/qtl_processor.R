@@ -38,31 +38,16 @@ create_gwas_windows <- function(signals, window_size = 1e6) {
   log_message(sprintf("Creating genomic windows of %d bp around %d GWAS signals", 
                      window_size, nrow(signals)))
   
+  # Convert to data.table if needed
+  signals <- as.data.table(signals)
+  
   # Calculate window coordinates
-  signals$start <- ifelse(signals$position - window_size >= 1, 
-                          signals$position - window_size, 1)
-  signals$end <- signals$position + window_size
+  signals[, start := pmax(1, position - window_size)]
+  signals[, end := position + window_size]
   
-  # Create GenomicRanges object
-  signals_gr <- makeGRangesFromDataFrame(
-    signals,
-    keep.extra.columns = FALSE,
-    ignore.strand = FALSE,
-    seqinfo = NULL,
-    seqnames.field = "chr",
-    start.field = "start",
-    end.field = "end",
-    strand.field = "strand",
-    starts.in.df.are.0based = FALSE
-  )
+  log_message(sprintf("Created %d genomic windows", nrow(signals)))
   
-  log_message(sprintf("Created %d genomic windows", length(signals_gr)))
-  
-  return(list(signals = signals, signals_gr = signals_gr))
-}
-
-#' Create genomic windows around QTL lead variants
-#'
+  return(signals)
 #' @param qtl_data data.table with QTL permutation results
 #' @param window_size Numeric: window size in base pairs
 #' @return data.table with window coordinates added
