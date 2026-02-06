@@ -71,8 +71,7 @@ create_qtl_windows <- function(qtl_data, window_size = 1e6) {
   log_message(sprintf("Creating %d bp windows around %d QTL lead variants", 
                      window_size, nrow(qtl_data)))
   
-  qtl_data[, mqtl_start_coord := ifelse(pos - window_size <= 0, 1, 
-                                         pos - window_size)]
+  qtl_data[, mqtl_start_coord := pmax(1, pos - window_size)]
   qtl_data[, mqtl_end_coord := pos + window_size]
   
   log_message("QTL windows created")
