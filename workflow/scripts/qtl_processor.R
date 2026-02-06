@@ -104,8 +104,8 @@ find_qtl_gwas_overlaps <- function(qtl_windows, gwas_signals) {
   gwas_signals[, position2 := gwas_signals$position]
   
   # Set keys for fast overlap join
-  setkey(qtl_windows, chr, mqtl_start_coord, mqtl_end_coord)
-  setkey(gwas_signals, chr, position, position2)
+  setkeyv(qtl_windows, c("chr", "mqtl_start_coord", "mqtl_end_coord"))
+  setkeyv(gwas_signals, c("chr", "position", "position2"))
   
   # Find overlaps
   overlaps <- foverlaps(qtl_windows, gwas_signals, type = "any", 
