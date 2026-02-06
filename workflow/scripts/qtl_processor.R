@@ -38,27 +38,16 @@ create_gwas_windows <- function(signals, window_size = 1e6) {
   log_message(sprintf("Creating genomic windows of %d bp around %d GWAS signals", 
                      window_size, nrow(signals)))
   
+  # Convert to data.table if needed
+  signals <- as.data.table(signals)
+  
   # Calculate window coordinates
-  signals$start <- ifelse(signals$position - window_size >= 1, 
-                          signals$position - window_size, 1)
-  signals$end <- signals$position + window_size
+  signals[, start := pmax(1, position - window_size)]
+  signals[, end := position + window_size]
   
-  # Create GenomicRanges object
-  signals_gr <- makeGRangesFromDataFrame(
-    signals,
-    keep.extra.columns = FALSE,
-    ignore.strand = FALSE,
-    seqinfo = NULL,
-    seqnames.field = "chr",
-    start.field = "start",
-    end.field = "end",
-    strand.field = "strand",
-    starts.in.df.are.0based = FALSE
-  )
+  log_message(sprintf("Created %d genomic windows", nrow(signals)))
   
-  log_message(sprintf("Created %d genomic windows", length(signals_gr)))
-  
-  return(list(signals = signals, signals_gr = signals_gr))
+  return(signals)
 }
 
 #' Create genomic windows around QTL lead variants
@@ -90,26 +79,42 @@ create_qtl_windows <- function(qtl_data, window_size = 1e6) {
 #' @return data.table with overlapping QTL-GWAS pairs
 #' @export
 find_qtl_gwas_overlaps <- function(qtl_windows, gwas_signals) {
+  cat("=== USING GENOMICRANGES VERSION ===\n")
   log_message("Finding overlaps between QTL and GWAS windows...")
   
-  # Convert to data.table if needed
-  qtl_windows <- copy(as.data.table(qtl_windows))
-  gwas_signals <- copy(as.data.table(gwas_signals))
+  # Use GenomicRanges instead of data.table to avoid the persistent error
+  qtl_gr <- GRanges(
+    seqnames = paste0("chr", qtl_windows$chr),
+    ranges = IRanges(start = qtl_windows$mqtl_start_coord, 
+                     end = qtl_windows$mqtl_end_coord),
+    gene_id = qtl_windows$gene_id,
+    pos = qtl_windows$pos,
+    qval = qtl_windows$qval
+  )
   
-  # Ensure chromosome is numeric
-  gwas_signals[, chr := as.numeric(as.character(chr))]
-  qtl_windows[, chr := as.numeric(as.character(chr))]
-  
-  # Create position2 column for foverlaps
-  gwas_signals[, position2 := gwas_signals$position]
-  
-  # Set keys for fast overlap join
-  setkeyv(qtl_windows, c("chr", "mqtl_start_coord", "mqtl_end_coord"))
-  setkeyv(gwas_signals, c("chr", "position", "position2"))
+  gwas_gr <- GRanges(
+    seqnames = paste0("chr", gwas_signals$chr),
+    ranges = IRanges(start = gwas_signals$position, 
+                     end = gwas_signals$position),
+    rsid = gwas_signals$rsid,
+    Loci = gwas_signals$Loci
+  )
   
   # Find overlaps
-  overlaps <- foverlaps(qtl_windows, gwas_signals, type = "any", 
-                        nomatch = NULL, mult = "all")
+  hits <- findOverlaps(qtl_gr, gwas_gr, type = "any")
+  
+  # Convert to data.table
+  overlaps <- data.table(
+    chr = as.numeric(gsub("chr", "", seqnames(qtl_gr)[queryHits(hits)])),
+    mqtl_start_coord = start(qtl_gr)[queryHits(hits)],
+    mqtl_end_coord = end(qtl_gr)[queryHits(hits)],
+    pos = qtl_gr$pos[queryHits(hits)],
+    gene_id = qtl_gr$gene_id[queryHits(hits)],
+    qval = qtl_gr$qval[queryHits(hits)],
+    position = start(gwas_gr)[subjectHits(hits)],
+    rsid = gwas_gr$rsid[subjectHits(hits)],
+    Loci = gwas_gr$Loci[subjectHits(hits)]
+  )
   
   log_message(sprintf("Found %d QTL-GWAS overlapping regions", nrow(overlaps)))
   log_message(sprintf("  Unique QTL genes: %d", length(unique(overlaps$gene_id))))
