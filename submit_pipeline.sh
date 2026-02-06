@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=coloc_pipeline
-#SBATCH --mem=32G
+#SBATCH --mem=128G
 #SBATCH --time=24:00:00
 #SBATCH --partition=cpu_p
 #SBATCH --qos=cpu_normal
@@ -30,7 +30,6 @@ echo "============================================"
 # - Skip completed steps (based on output file timestamps)
 # - Resume from the last successful stage
 # - Parallelize independent jobs across tissues
-# - Use cluster submission for compute-intensive rules
 
 snakemake \
     --use-conda \
@@ -38,12 +37,8 @@ snakemake \
     --keep-going \
     --rerun-incomplete \
     --printshellcmds \
-    --reason \
     --latency-wait 60 \
-    --cluster "sbatch --partition=cpu_p --qos=cpu_normal --mem={resources.mem_mb}M --time={resources.time} --cpus-per-task={threads} --output=logs/slurm_%j_{rule}_{wildcards}.out --error=logs/slurm_%j_{rule}_{wildcards}.err" \
-    --cluster-status "python workflow/scripts/slurm_status.py" \
-    --jobs 20 \
-    --max-jobs-per-second 10
+    all
 
 EXIT_CODE=$?
 
