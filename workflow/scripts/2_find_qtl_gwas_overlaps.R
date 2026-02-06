@@ -24,12 +24,20 @@ if (exists("snakemake")) {
 
 cat("Script directory:", script_dir, "\n", file=stderr())
 
-# Source modular functions
-source(file.path(script_dir, "coloc_helpers.R"))
-source(file.path(script_dir, "data_loader.R"))
-source(file.path(script_dir, "qtl_processor.R"))
-source(file.path(script_dir, "data_loader.R"))
-source(file.path(script_dir, "qtl_processor.R"))
+# Source modular functions with error handling
+tryCatch({
+  cat("Sourcing coloc_helpers.R...\n", file=stderr())
+  source(file.path(script_dir, "coloc_helpers.R"))
+  cat("Sourcing data_loader.R...\n", file=stderr())
+  source(file.path(script_dir, "data_loader.R"))
+  cat("Sourcing qtl_processor.R...\n", file=stderr())
+  source(file.path(script_dir, "qtl_processor.R"))
+  cat("All helpers loaded successfully\n", file=stderr())
+}, error = function(e) {
+  cat("FATAL: Failed to source helper scripts\n", file=stderr())
+  cat("Error:", conditionMessage(e), "\n", file=stderr())
+  quit(status = 1)
+})
 
 # Get parameters from Snakemake
 trait <- snakemake@wildcards[["trait"]]

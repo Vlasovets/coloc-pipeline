@@ -19,6 +19,12 @@
 # DEPENDENCIES
 # =============================================================================
 
+# Install gwasvcf from GitHub if not available (not in conda)
+if (!requireNamespace("gwasvcf", quietly = TRUE)) {
+  message("Installing gwasvcf from GitHub...")
+  remotes::install_github("MRCIEU/gwasvcf", upgrade = "never")
+}
+
 suppressPackageStartupMessages({
   library(data.table)
   library(VariantAnnotation)
