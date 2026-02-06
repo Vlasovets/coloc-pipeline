@@ -56,7 +56,7 @@ tryCatch({
   
   # Find overlaps
   cat("Finding QTL-GWAS overlaps...\n")
-  overlaps <- find_qtl_gwas_overlaps(gwas_windows, qtl_windows)
+  overlaps <- find_qtl_gwas_overlaps(qtl_windows, gwas_windows)
   cat("Found", nrow(overlaps), "overlapping regions\n\n")
   
   # Save results
