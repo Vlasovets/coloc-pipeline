@@ -93,8 +93,8 @@ find_qtl_gwas_overlaps <- function(qtl_windows, gwas_signals) {
   log_message("Finding overlaps between QTL and GWAS windows...")
   
   # Convert to data.table if needed
-  if (!is.data.table(qtl_windows)) qtl_windows <- as.data.table(qtl_windows)
-  if (!is.data.table(gwas_signals)) gwas_signals <- as.data.table(gwas_signals)
+  qtl_windows <- copy(as.data.table(qtl_windows))
+  gwas_signals <- copy(as.data.table(gwas_signals))
   
   # Ensure chromosome is numeric
   gwas_signals[, chr := as.numeric(as.character(chr))]
