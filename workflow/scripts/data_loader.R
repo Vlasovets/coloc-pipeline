@@ -291,8 +291,7 @@ load_gwas_signals <- function(signals_file, phenotype = NULL) {
     log_message(sprintf("Loaded %d signals", nrow(signals)))
     
     if (!is.null(phenotype)) {
-      signals <- signals[phenotype == phenotype | 
-                        `Osteoarthritis phenotype` == phenotype]
+      signals <- signals[signals$phenotype == phenotype, ]
       log_message(sprintf("Filtered to %d signals for phenotype: %s", 
                          nrow(signals), phenotype))
     }
