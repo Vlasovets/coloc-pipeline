@@ -40,7 +40,7 @@ tryCatch({
   cat("Loading QTL permutation results...\n")
   qtl_perm_file <- snakemake@config[["qtl_permutation_files"]][[tissue]]
   qtl_perms <- load_qtl_permutations(
-    qtl_perm_file = qtl_perm_file,
+    perm_file = qtl_perm_file,
     qval_threshold = snakemake@config[["qval_threshold"]]
   )
   cat("Loaded", nrow(qtl_perms), "significant QTLs (qval <", 
