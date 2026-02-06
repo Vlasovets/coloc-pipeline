@@ -7,10 +7,11 @@ suppressPackageStartupMessages({
   library(GenomicRanges)
 })
 
-# Source modular functions
-source(file.path(snakemake@scriptdir, "coloc_helpers.R"))
-source(file.path(snakemake@scriptdir, "data_loader.R"))
-source(file.path(snakemake@scriptdir, "qtl_processor.R"))
+# Source modular functions with absolute paths
+script_dir <- "/home/itg/oleg.vlasovets/projects/coloc-pipeline/workflow/scripts"
+source(file.path(script_dir, "coloc_helpers.R"))
+source(file.path(script_dir, "data_loader.R"))
+source(file.path(script_dir, "qtl_processor.R"))
 
 # Get parameters from Snakemake
 trait <- snakemake@wildcards[["trait"]]
