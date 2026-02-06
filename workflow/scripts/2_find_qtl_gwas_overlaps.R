@@ -8,8 +8,7 @@ suppressPackageStartupMessages({
 })
 
 # Source modular functions
-script_dir <- dirname(snakemake@scriptdir)
-source(snakemake@config[["helper_functions"]])
+source(file.path(snakemake@scriptdir, "coloc_helpers.R"))
 source(file.path(snakemake@scriptdir, "data_loader.R"))
 source(file.path(snakemake@scriptdir, "qtl_processor.R"))
 
