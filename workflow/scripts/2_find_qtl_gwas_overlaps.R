@@ -2,14 +2,32 @@
 # Stage 2: Find QTL-GWAS Overlaps
 # This script identifies genomic regions where QTL and GWAS signals overlap
 
+# Early error wrapper to capture issues before sink()
+options(error = function() {
+  cat("\n=== R ERROR TRACE ===\n", file=stderr())
+  traceback(2, file=stderr())
+  if (!interactive()) quit(status = 2)
+})
+
 suppressPackageStartupMessages({
   library(data.table)
   library(GenomicRanges)
 })
 
-# Source modular functions with absolute paths
-script_dir <- "/home/itg/oleg.vlasovets/projects/coloc-pipeline/workflow/scripts"
+# Get script directory - Snakemake should provide this
+if (exists("snakemake")) {
+  script_dir <- snakemake@scriptdir
+} else {
+  # Fallback for testing
+  script_dir <- "/home/itg/oleg.vlasovets/projects/coloc-pipeline/workflow/scripts"
+}
+
+cat("Script directory:", script_dir, "\n", file=stderr())
+
+# Source modular functions
 source(file.path(script_dir, "coloc_helpers.R"))
+source(file.path(script_dir, "data_loader.R"))
+source(file.path(script_dir, "qtl_processor.R"))
 source(file.path(script_dir, "data_loader.R"))
 source(file.path(script_dir, "qtl_processor.R"))
 
@@ -20,12 +38,20 @@ output_overlaps <- snakemake@output[["overlaps"]]
 output_qtl_subset <- snakemake@output[["qtl_subset"]]
 log_file <- snakemake@log[[1]]
 
-# Redirect output to log
-sink(log_file, append = FALSE, split = TRUE)
-cat("Stage 2: Find QTL-GWAS Overlaps\n")
-cat("Trait:", trait, "\n")
-cat("Tissue:", tissue, "\n")
-cat("Started at:", as.character(Sys.time()), "\n\n")
+# Redirect output to log with early error handling
+tryCatch({
+  sink(log_file, append = FALSE, split = TRUE)
+  cat("Stage 2: Find QTL-GWAS Overlaps\n")
+  cat("Script directory used:", script_dir, "\n")
+  cat("Trait:", trait, "\n")
+  cat("Tissue:", tissue, "\n")
+  cat("Started at:", as.character(Sys.time()), "\n\n")
+}, error = function(e) {
+  # If even sink fails, write to stderr
+  message("FATAL: Cannot open log file: ", log_file)
+  message("Error: ", conditionMessage(e))
+  quit(status = 1)
+})
 
 tryCatch({
   
