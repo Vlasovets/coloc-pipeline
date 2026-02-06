@@ -291,17 +291,17 @@ load_gwas_signals <- function(signals_file, phenotype = NULL) {
     log_message(sprintf("Loaded %d signals", nrow(signals)))
     
     if (!is.null(phenotype)) {
-      signals <- signals[signals$phenotype == phenotype, ]
+      signals <- signals[phenotype == phenotype]
       log_message(sprintf("Filtered to %d signals for phenotype: %s", 
                          nrow(signals), phenotype))
     }
     
     # Ensure required columns exist
     if (!"chr" %in% colnames(signals) && "chromosome" %in% colnames(signals)) {
-      signals$chr <- signals$chromosome
+      signals[, chr := chromosome]
     }
     
-    return(as.data.frame(signals))
+    return(signals)
     
   }, error = function(e) {
     log_message(sprintf("Error loading signals: %s", e$message), "ERROR")
