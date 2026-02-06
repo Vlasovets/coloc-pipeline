@@ -8,9 +8,10 @@ suppressPackageStartupMessages({
 })
 
 # Source modular functions
+script_dir <- dirname(snakemake@scriptdir)
 source(snakemake@config[["helper_functions"]])
-source("workflow/scripts/data_loader.R")
-source("workflow/scripts/qtl_processor.R")
+source(file.path(snakemake@scriptdir, "data_loader.R"))
+source(file.path(snakemake@scriptdir, "qtl_processor.R"))
 
 # Get parameters from Snakemake
 trait <- snakemake@wildcards[["trait"]]
