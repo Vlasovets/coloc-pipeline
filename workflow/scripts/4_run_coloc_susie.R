@@ -12,7 +12,7 @@ suppressPackageStartupMessages({
   library(optparse)
 })
 
-source("workflow/scripts/coloc_helpers.R")
+source(file.path(snakemake@scriptdir, "coloc_helpers.R"))
 
 #' Run coloc.susie analysis
 #'

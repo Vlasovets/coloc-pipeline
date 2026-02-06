@@ -13,9 +13,9 @@ suppressPackageStartupMessages({
   library(optparse)
 })
 
-source("workflow/scripts/data_loader.R")
-source("workflow/scripts/qtl_processor.R")
-source("workflow/scripts/coloc_helpers.R")
+source(file.path(snakemake@scriptdir, "data_loader.R"))
+source(file.path(snakemake@scriptdir, "qtl_processor.R"))
+source(file.path(snakemake@scriptdir, "coloc_helpers.R"))
 
 #' Run coloc.abf for a single QTL-GWAS pair
 #'
