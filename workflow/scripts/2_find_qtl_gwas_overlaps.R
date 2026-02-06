@@ -31,8 +31,8 @@ tryCatch({
   # Load GWAS signals
   cat("Loading GWAS signals...\n")
   gwas_signals <- load_gwas_signals(
-    trait = trait,
-    signal_dir = snakemake@config[["gwas_signal_dir"]]
+    signals_file = snakemake@config[["gwas_signals_file"]],
+    phenotype = trait
   )
   cat("Loaded", nrow(gwas_signals), "GWAS signals\n\n")
   
