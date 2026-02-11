@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ dev ]
   pull_request:
-    branches: [ main ]
+    branches: [ dev ]
 
 jobs:
   build:
@@ -17,7 +17,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.9' # You can change this to your desired Python version
+        python-version: '3.10'
 
     - name: Install dependencies
       run: |
@@ -27,6 +27,4 @@ jobs:
         fi
 
     - name: Run tests (or linting/build command)
-      # Replace this with your actual test command, e.g., pytest, flake8, etc.
-      # If you don't have tests yet, you can use a placeholder like 'echo "No tests configured."'
       run: echo "Add your test command here, e.g., pytest"
