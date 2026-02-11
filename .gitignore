@@ -1,0 +1,73 @@
+# ============================================
+# Local Configuration (User-Specific)
+# ============================================
+config.R
+config.yaml
+
+# ============================================
+# Pipeline Outputs & Runtime Files
+# ============================================
+# Snakemake working directory
+.snakemake/
+
+# All pipeline results
+results/
+logs/
+
+# GWAS and QTL data files (large)
+*.vcf
+*.vcf.gz
+*.vcf.bgz
+*.tbi
+*.parquet
+*.rda
+*.RData
+
+# Intermediate testing scripts
+run_stage2.sh
+
+# Working documentation (keep local only)
+CONTINUE_PIPELINE.md
+REFACTORING_SUMMARY.md
+
+# ============================================
+# R Specific
+# ============================================
+.Rproj.user
+.Rhistory
+.Ruserdata
+*.Rproj
+
+# ============================================
+# Log Files
+# ============================================
+*.log
+*.out
+*.err
+slurm-*.out
+slurm-*.err
+
+# ============================================
+# Temporary & System Files
+# ============================================
+*~
+.DS_Store
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# ============================================
+# Conda Environments (installed locally)
+# ============================================
+.conda/
+miniconda3/
+
+# ============================================
+# Keep These Patterns (DO NOT IGNORE)
+# ============================================
+# !config.yaml.example    - Example config (tracked)
+# !environment.yml        - Main conda env (tracked)
+# !envs/*.yml            - Rule-specific envs (tracked)
+# !src/                  - Original reference code (tracked)
+# !workflow/             - Pipeline scripts (tracked)

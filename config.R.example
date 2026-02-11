@@ -1,0 +1,18 @@
+# Configuration Template for GWAS VCF Conversion Pipeline
+# 
+# INSTRUCTIONS:
+# 1. Copy this file to config.R: cp config.R.example config.R
+# 2. Update the paths below to match your local environment
+# 3. The config.R file will be ignored by git (not committed)
+
+# Path to variant annotation file (hg38)
+VARIANT_ANNOTATION_FILE <- "/path/to/variant_ann_hg38.txt.gz"
+
+# Directory containing GWAS summary statistics
+GWAS_SUMSTATS_DIR <- "/path/to/gwas/sumstats/directory"
+
+# Output directory for converted VCF files
+OUTPUT_PATH <- "/path/to/output/directory"
+
+# Path to helper functions script (relative to project root)
+HELPER_SCRIPT <- "scripts/Coloc_helper_functions.R"
