@@ -1,0 +1,35 @@
+# Configuration file for Coloc Pipeline - EXAMPLE
+# Copy this file to config.yaml and modify paths for your environment
+
+# Input data paths
+variant_annotation_file: "/path/to/variant_ann_hg38.txt.gz"
+gwas_sumstats_dir: "/path/to/gwas/sumstats"
+output_dir: "results"
+
+# Helper scripts
+helper_script: "workflow/scripts/Coloc_helper_functions.R"
+
+# Traits to process
+traits:
+  - KNEE
+  - TKR
+  - ALLOA
+
+# Sample sizes (cases, controls) for each trait
+sample_sizes:
+  KNEE:
+    cases: 172256
+    controls: 1144244
+  TKR:
+    cases: 48161
+    controls: 958463
+  ALLOA:
+    cases: 489952
+    controls: 1471094
+
+# GWAS file pattern
+gwas_file_pattern: "GO.FILTER.GW.final.meta.results.ALL.{trait}.FULL.MAFless0.01.Nupdated.txt.gz"
+
+# Genome build settings
+genome_build: "hg19"
+liftover_to_hg38: true
