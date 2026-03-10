@@ -16,3 +16,4 @@ dependencies:
   - r-remotes
   - r-biocmanager
   - r-optparse
+  - r-arrow
