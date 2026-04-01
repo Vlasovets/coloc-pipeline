@@ -3,12 +3,21 @@ Stage 5: Aggregate and postprocess colocalization results
 Combines results across tissues and generates summary statistics
 """
 
+def _available_coloc_results(wildcards):
+    """Return only coloc result files that already exist on disk.
+    Allows Stage 4 to run even when not all tissues have Stage 3 output."""
+    candidates = expand(
+        "{output_dir}/coloc_abf/{trait}.{tissue}.colocABF_results.txt",
+        output_dir=wildcards.output_dir,
+        trait=wildcards.trait,
+        tissue=TISSUES,
+    )
+    return [f for f in candidates if os.path.exists(f)]
+
+
 rule aggregate_results:
     input:
-        expand(
-            "{{output_dir}}/coloc_abf/{{trait}}.{tissue}.colocABF_results.txt",
-            tissue=TISSUES
-        )
+        _available_coloc_results
     output:
         all_results="{output_dir}/results/{trait}_all_coloc_results.txt",
         sig_results="{output_dir}/results/{trait}_significant_coloc_results.txt"
