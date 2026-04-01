@@ -85,11 +85,13 @@ main() {
     snakemake --unlock || log_info "Directory already unlocked or no lock present"
     
     # Build snakemake command
+    # Target: _all_coloc_results.txt (aggregate_results rule in stage5_postprocess.smk)
     SNAKEMAKE_CMD="snakemake \
-        ${OUTPUT_DIR}/results/${TRAIT}_coloc_aggregated.txt \
+        ${OUTPUT_DIR}/results/${TRAIT}_all_coloc_results.txt \
         --use-conda \
         --cores ${SLURM_CPUS_PER_TASK:-1} \
         --rerun-incomplete \
+        --rerun-triggers mtime \
         --printshellcmds \
         --latency-wait 60"
     
@@ -105,12 +107,14 @@ main() {
         log_info "Stage 4 completed successfully!"
         log_info "=========================================="
         log_info "Output files:"
-        ls -lh "${OUTPUT_DIR}/results/${TRAIT}_coloc"*.txt 2>/dev/null || true
-        
-        if [[ -f "${OUTPUT_DIR}/results/${TRAIT}_coloc_summary.txt" ]]; then
-            log_info ""
-            log_info "Summary:"
-            cat "${OUTPUT_DIR}/results/${TRAIT}_coloc_summary.txt"
+        ls -lh "${OUTPUT_DIR}/results/${TRAIT}_all_coloc_results.txt" \
+                "${OUTPUT_DIR}/results/${TRAIT}_significant_coloc_results.txt" 2>/dev/null || true
+
+        log_info ""
+        log_info "Significant colocalizations:"
+        if [[ -f "${OUTPUT_DIR}/results/${TRAIT}_significant_coloc_results.txt" ]]; then
+            NSIG=$(( $(wc -l < "${OUTPUT_DIR}/results/${TRAIT}_significant_coloc_results.txt") - 1 ))
+            log_info "  ${NSIG} significant colocalization(s)"
         fi
         exit 0
     else
