@@ -34,9 +34,12 @@ cores <- snakemake@threads
 variant_ann <- fread(snakemake@params$variant_ann, data.table=FALSE)
 variant_ann$chr <- as.integer(variant_ann$chr)
 variant_ann <- variant_ann[!is.na(variant_ann$chr) & nchar(variant_ann$ref)==1 & nchar(variant_ann$alt)==1,]
+if(!"variant_id_chrpos" %in% colnames(variant_ann)) {
+  variant_ann$variant_id_chrpos <- paste(variant_ann$chr, variant_ann$position, variant_ann$alt, sep="_")
+}
 
-# Define paths
-qtl.data.path <- snakemake@params$qtl_data_path
+# Define paths — use qtl_nominal_dir from config (correct per-tissue path)
+qtl.nominal.dir <- snakemake@params$qtl_nominal_dir
 window_length <- 1e6  # 1Mb
 type <- ifelse(length(GWAS_n) == 1, "quant", "cc")
 
@@ -47,14 +50,26 @@ cat(sprintf("[%s] Starting coloc ABF analysis for %s - %s\n",
 # 1. Load overlap data
 #############################################################################
 cat(sprintf("[%s] Loading overlap data from %s\n", Sys.time(), overlap_file))
-load(overlap_file)  # This loads 'overlap_df'
+load(overlap_file)  # This loads 'overlaps', 'gwas_windows', 'qtl_windows'
 
-if(!exists("overlap_df") || nrow(overlap_df$overlap_df) == 0) {
+if(!exists("overlaps") || nrow(overlaps) == 0) {
   cat(sprintf("[%s] No overlaps found, creating empty result file\n", Sys.time()))
   empty_result <- data.frame()
   fwrite(empty_result, output_file, sep="\t")
   quit(save="no", status=0)
 }
+
+# Create overlap_df structure expected by perform_coloc()
+# overlaps columns: chr, mqtl_start_coord, mqtl_end_coord, pos, gene_id, qval, position, rsid, Loci
+overlap_df_coloc <- data.frame(
+  cpg.id = overlaps$gene_id,
+  cpg.pos = overlaps$pos,
+  signal_gwas.rsid = overlaps$rsid,
+  signal_gwas.chr = overlaps$chr,
+  signal_gwas.position = overlaps$position,
+  stringsAsFactors = FALSE
+)
+cat(sprintf("[%s] Overlap data: %d gene-signal pairs\n", Sys.time(), nrow(overlap_df_coloc)))
 
 #############################################################################
 # 2. Load GWAS data (already prepared from Stage 2)
@@ -68,26 +83,20 @@ load(gwas_associations_file)  # This loads 'GWAS_associations'
 #############################################################################
 cat(sprintf("[%s] Loading QTL data for %s\n", Sys.time(), tissue))
 
-# Get tissue abbreviation for file paths
-if(tissue == "high_grade_cartilage") ab <- "hg"
-else if(tissue == "low_grade_cartilage") ab <- "lg"
-else if(tissue == "synovium") ab <- "synovium"
-else if(tissue == "fat_pad") ab <- "fat_pad"
-
 # Read all QTL chromosomes and subset to genes with overlaps
-PATH_IN_M <- file.path(qtl.data.path, tissue, "tensorqtl/output_tensorqtl/nom/")
+# File pattern in qtl_nominal_dir: cis_qtl.cis_qtl_pairs.chr{N}.parquet
 qtl_subset_file <- snakemake@input$qtl_subset
 
 # If we have pre-saved QTL data from Stage 2, use it
 if(file.exists(qtl_subset_file)) {
-  # The Stage 2 output lists genes to extract
-  qtl_genes <- fread(qtl_subset_file, header=FALSE)$V1
-  
-  cat(sprintf("[%s] Extracting QTL data for %d genes\n", Sys.time(), length(qtl_genes)))
-  
+  # The Stage 2 output lists genes to extract (has header 'gene_id')
+  qtl_genes <- fread(qtl_subset_file, header=TRUE)$gene_id
+
+  cat(sprintf("[%s] Extracting QTL data for %d genes from %s\n", Sys.time(), length(qtl_genes), qtl.nominal.dir))
+
   tmp.dt <- data.table()
   for(c in seq(1,22)){
-    qtl_file <- paste0(PATH_IN_M, ab, ".cis_qtl_pairs.chr", c, ".parquet")
+    qtl_file <- file.path(qtl.nominal.dir, paste0("cis_qtl.cis_qtl_pairs.chr", c, ".parquet"))
     if(!file.exists(qtl_file)) next
     
     qtl <- as.data.table(arrow::read_parquet(qtl_file))
@@ -140,25 +149,25 @@ in_m_qtl <- split(mqtl_df, mqtl_df$gene_id)
 #############################################################################
 cat(sprintf("[%s] Running colocalization analysis\n", Sys.time()))
 
-# Create output directory for intermediate files
+# Create output directories
 coloc_dir <- dirname(output_file)
+out_path <- dirname(coloc_dir)
 dir.create(coloc_dir, showWarnings = FALSE, recursive = TRUE)
-dir.create(file.path(dirname(coloc_dir), "coloc_rda_files"), showWarnings = FALSE, recursive = TRUE)
+dir.create(file.path(out_path, paste0(GWAS_ID, "_coloc_rda_files")), showWarnings = FALSE, recursive = TRUE)
+dir.create(file.path(out_path, "coloc", "Coloc_sumstats", paste0("Coloc_mQTL_", GWAS_ID)), showWarnings = FALSE, recursive = TRUE)
+dir.create(file.path(out_path, "coloc", "Coloc_sumstats", paste0("Coloc_", GWAS_ID)), showWarnings = FALSE, recursive = TRUE)
 
 # Run coloc using the helper function
 colocFAST_df_results <- perform_coloc(
-  overlap_df = overlap_df$overlap_df, 
-  in_m_qtl = in_m_qtl, 
-  out_path = dirname(dirname(coloc_dir)),  # Project path
-  tissue = tissue, 
-  gwas_n = GWAS_n, 
+  overlap_df = overlap_df_coloc,
+  in_m_qtl = in_m_qtl,
+  out_path = out_path,
+  gwas_n = GWAS_n,
   in_gwas = GWAS_associations,
-  gwas_cc_ratio = NULL, 
-  GTEX_APP = FALSE, 
-  GWAS_type = type, 
-  GWAS_ID = GWAS_ID, 
-  QTL_n = QTL_n, 
-  is.eQTL = TRUE, 
+  GWAS_type = type,
+  GWAS_ID = GWAS_ID,
+  QTL_n = QTL_n,
+  is.eQTL = TRUE,
   cores = cores
 )
 
