@@ -31,6 +31,28 @@ CONTINUE_PIPELINE.md
 REFACTORING_SUMMARY.md
 
 # ============================================
+# Container Files (large binaries, local builds)
+# ============================================
+*.sif
+*.simg
+containers/
+Miniforge3-*.sh
+
+# ============================================
+# Tutorial / Development Artifacts
+# ============================================
+Snakefile_tutorial
+workflow/rules/test.smk
+
+# ============================================
+# Local-only Markdown Docs (tracked selectively below)
+# ============================================
+markdown/*
+!markdown/PIPELINE_GUIDE.md
+!markdown/PIPELINE_STATUS.md
+!markdown/REPO_AUDIT.md
+
+# ============================================
 # R Specific
 # ============================================
 .Rproj.user
