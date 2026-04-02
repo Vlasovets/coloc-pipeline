@@ -301,9 +301,26 @@ window_size: 1000000       # 1 Mb window around GWAS signals
 qval_threshold: 0.05       # eGene significance threshold
 cores: 4                   # Parallel cores for Stage 3
 
-# Significance thresholds for Stage 4
+# Significance thresholds for Stage 4 (aggregation)
 pp4_threshold: 0.8         # PP4 >= 0.8 = strong colocalization
 pp4_pp3_ratio: 2.0         # PP4/PP3 > 2 for moderate evidence
+
+# Stage 5 (SuSiE fine-mapping) — LD reference paths
+# QTL LD: per-tissue plink bfile prefixes (no extension)
+qtl_genotype_bfiles:
+  high_grade_cartilage: "/path/to/eQTL/genotypes/high_grade_cartilage/CleanGenotypes/P21083A_...high_grade_cartilage.MAF005CR99.biall_rename"
+  low_grade_cartilage:  "/path/to/eQTL/genotypes/low_grade_cartilage/CleanGenotypes/..."
+  synovium:             "/path/to/eQTL/genotypes/synovium/CleanGenotypes/..."
+  fat_pad:              "/path/to/eQTL/genotypes/fat_pad/CleanGenotypes/..."
+
+# GWAS LD: UKB plink bfiles by chromosome (prefix; chr number appended)
+gwas_ld_bfile_prefix: "/lustre/groups/itg/shared/referenceData/ukbiobank/chip/bgen2plink/CM/chr"
+
+# plink binary
+plink_bin: "/lustre/groups/itg/shared/software/bin/plink"
+
+# SuSiE PP4 candidate threshold (runs SuSiE if PP4 > this AND not already significant)
+susie_pp4_threshold: 0.25
 
 sample_sizes:
   KNEE:
