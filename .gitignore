@@ -21,6 +21,7 @@ logs/
 *.tbi
 *.parquet
 *.rda
+*.rds
 *.RData
 
 # Intermediate testing scripts
@@ -73,11 +74,14 @@ slurm-*.err
 # Temporary & System Files
 # ============================================
 *~
+*.tmp
 .DS_Store
 *.swp
 *.swo
 .vscode/
 .idea/
+__pycache__/
+*.pyc
 
 # ============================================
 # Conda Environments (installed locally)
