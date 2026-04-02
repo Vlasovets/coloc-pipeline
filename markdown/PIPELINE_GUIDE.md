@@ -33,30 +33,45 @@ PP4 > 0.6 AND PP4/PP3 > 2 (moderate evidence).
 ```
 GWAS sumstats ─────────────────────────────────────────────┐
                                                             ▼
-               Stage 1: GWAS VCF conversion (liftover hg19→hg38)
+               Stage 1: GWAS VCF conversion          [~1–2 h]
+               (liftover hg19→hg38, allele harmonization)
                               │
                               ▼  results/gwas_vcf/KNEE_hg38.vcf.bgz
                               │
 eQTL permutations ────────────┤
 GWAS signals (hg38) ──────────┤
                               ▼
-               Stage 2: QTL-GWAS overlap detection  [per tissue]
+               Stage 2: QTL-GWAS overlap             [~2h 38m per tissue]
+               (GenomicRanges, VCF extraction)
                               │
-                              ▼  results/overlaps/KNEE.{tissue}.*.rda/txt
+                   ┌──────────┴──────────┐
+                   │  × 4 tissues        │  (can run in parallel)
+                   ▼                     ▼
+eQTL nominal ──────┤
+Variant ann ───────┤
+                   ▼
+               Stage 3: Coloc ABF analysis           [~25 min per tissue]
+               (coloc.abf, mclapply × 4 cores)
                               │
-eQTL nominal (parquet) ───────┤
-Variant annotation ───────────┤
-                              ▼
-               Stage 3: Coloc ABF analysis  [per tissue, ~25 min]
+                   ┌──────────┴──────────┐
+                   │  × 4 tissues        │
+                   ▼                     ▼
+               Stage 4: Aggregate results            [~1 min]
+               (combine, filter PP4 ≥ 0.8 or PP4/PP3 > 2)
                               │
-                              ▼  results/coloc_abf/KNEE.{tissue}.colocABF_results.txt
-                              │
-                              ▼
-               Stage 4: Aggregate + filter significant results
-                              │
-                              ├─▶ results/results/KNEE_all_coloc_results.txt
-                              └─▶ results/results/KNEE_significant_coloc_results.txt
+                ┌─────────────┴──────────────┐
+                ▼                            ▼
+  KNEE_all_coloc_results.txt    KNEE_significant_coloc_results.txt
+
+Total wall time (all 4 tissues, stages sequential): ~13–14 h
+Total wall time (Stage 3 tissues parallelized):     ~6–7 h
 ```
+
+Runtimes measured from SLURM job logs (KNEE/high_grade_cartilage):
+- Stage 2: 2h 38m (job 34965770)
+- Stage 3: 25 min (job 34965770)
+- Stage 4: 1 min (job 34982216)
+- Stage 1: ~1–2 h (no dedicated log; estimate from known VCF size ~184M)
 
 ---
 
@@ -112,33 +127,103 @@ coloc-pipeline/
 
 ## 3. Environment Setup
 
-### Conda environments
+> **For colleagues on the Helmholtz HPC:** Option 2 (Apptainer) is recommended
+> for reproducibility — the image is fully self-contained and requires no local
+> conda setup. If no image is available to you yet, use Option 1 (Conda) below.
 
-There are two conda environments:
+---
 
-**1. `coloc-pipeline`** — for running Snakemake and submitting jobs
+### Option 1: Conda (set up your own environment)
+
+This is the fallback approach. It requires conda to be installed on your account.
+
+**Step 1: Install conda** (skip if already available)
 ```bash
-source /home/itg/oleg.vlasovets/miniconda3/etc/profile.d/conda.sh
+# Miniforge is recommended: https://github.com/conda-forge/miniforge
+# Download and run the installer, then restart your shell.
+```
+
+**Step 2: Create the pipeline environment**
+```bash
+# Adjust the conda init path to match your installation:
+source ~/miniconda3/etc/profile.d/conda.sh   # or ~/miniforge3/etc/profile.d/conda.sh
+
+cd /home/<your_username>/projects/coloc-pipeline
+
+# Create the Snakemake orchestration environment from the repo file
+conda env create -f environment.yml
 conda activate coloc-pipeline
 snakemake --version   # Should print 9.16.0 or similar
 ```
 
-**2. R coloc environment** — managed automatically by Snakemake via `--use-conda`
-- Located at `.snakemake/conda/<hash>_/` after first build
-- Contains: R, coloc 5.2.3, arrow 21.0.0, data.table, GenomicRanges, gwasvcf, etc.
-- Built automatically on first `snakemake --use-conda` run (~10 min)
-
-### One-time setup
+**Step 3: Build the R environment (first time only, ~10 min)**
 ```bash
-cd /home/itg/oleg.vlasovets/projects/coloc-pipeline
-conda activate coloc-pipeline
-
-# Build R conda env (first time only — takes ~10 min)
+# This creates the R coloc environment used by all Snakemake rules
 snakemake --use-conda --conda-create-envs-only
 
-# Verify pipeline config parses without errors
-snakemake -n --dry-run 2>&1 | head -20
+# Verify the pipeline config parses without errors
+snakemake -n --rerun-triggers mtime 2>&1 | head -20
 ```
+
+The R environment will be placed in `.snakemake/conda/<hash>_/` and contains:
+R 4.3, coloc 5.2.3, arrow 21.0.0, data.table, GenomicRanges, gwasvcf, and all
+other dependencies defined in `envs/r_coloc.yml`.
+
+---
+
+### Option 2: Apptainer (recommended for HPC reproducibility)
+
+A pre-built Apptainer image and its definition file are included in the repository:
+
+```
+coloc-pipeline/
+├── coloc-pipeline.sif   # Pre-built image (946 MB), built 2026-03-10
+└── coloc-pipeline.def   # Definition file (for rebuilding)
+```
+
+The image contains both conda environments (`coloc-pipeline` + `r_coloc`) baked in,
+so no local conda setup is required.
+
+**Check if the image is accessible to you:**
+```bash
+ls -lh /home/itg/oleg.vlasovets/projects/coloc-pipeline/coloc-pipeline.sif
+# -rwxr-xr-x 946M Mar 10 18:15 coloc-pipeline.sif
+```
+
+If you cannot access that path, copy it to your scratch space or rebuild (see below).
+
+**Using the image:**
+```bash
+# Run an R script inside the container
+apptainer exec \
+  --bind /home/<your_username>/projects/coloc-pipeline:/pipeline \
+  --bind /lustre/scratch/users/<your_username>:/scratch \
+  /home/itg/oleg.vlasovets/projects/coloc-pipeline/coloc-pipeline.sif \
+  Rscript /pipeline/workflow/scripts/3_run_coloc_abf.R
+
+# Run Snakemake (all SLURM scripts activate the coloc-pipeline conda env
+# inside the container automatically via PATH in the image)
+apptainer exec \
+  --bind /home/<your_username>/projects/coloc-pipeline:/pipeline \
+  --bind /lustre/scratch/users/<your_username>:/scratch \
+  /home/itg/oleg.vlasovets/projects/coloc-pipeline/coloc-pipeline.sif \
+  snakemake --cores 4
+```
+
+**Required bind mounts** (adjust paths for your username):
+- `--bind /home/<your_username>/projects/coloc-pipeline:/pipeline`
+- `--bind /lustre/scratch/users/<your_username>:/scratch`
+- `--bind /localscratch:/localscratch` (for TMPDIR on compute nodes)
+- Read-only group data is accessible directly (no bind needed on this cluster)
+
+**Rebuilding the image from scratch** (maintainer only — takes ~20–30 min):
+```bash
+cd /home/itg/oleg.vlasovets/projects/coloc-pipeline
+apptainer build coloc-pipeline.sif coloc-pipeline.def
+```
+
+The `.def` file bootstraps from `condaforge/mambaforge:latest` and installs both
+`environment.yml` and `envs/r_coloc.yml` into `/opt/conda/envs/`.
 
 ---
 
@@ -501,12 +586,15 @@ Tests are R scripts (same framework as production scripts) with two parts each:
 salloc --nodes=1 --cpus-per-task=4 --mem=16G --time=1:00:00 \
        --partition=interactive_cpu_p --qos=interactive_cpu_short --nice=10000
 
-source /home/itg/oleg.vlasovets/miniconda3/etc/profile.d/conda.sh
+# Adjust conda init path to your installation:
+source ~/miniconda3/etc/profile.d/conda.sh   # or ~/miniforge3/etc/profile.d/conda.sh
+conda activate coloc-pipeline
 
-# Activate the R conda env (contains all required packages)
-conda activate /home/itg/oleg.vlasovets/projects/coloc-pipeline/.snakemake/conda/<hash>_
+# Activate the R conda env (contains all required R packages)
+# Find the hash with: ls .snakemake/conda/
+conda activate /path/to/coloc-pipeline/.snakemake/conda/<hash>_
 
-cd /home/itg/oleg.vlasovets/projects/coloc-pipeline
+cd /path/to/coloc-pipeline
 
 Rscript tests/test_stage1.R
 Rscript tests/test_stage2.R
@@ -540,11 +628,12 @@ Follow the existing pattern in any test file:
 
 **Fix:** Activate the correct conda environment before running:
 ```bash
-source /home/itg/oleg.vlasovets/miniconda3/etc/profile.d/conda.sh
+source ~/miniconda3/etc/profile.d/conda.sh   # adjust to your conda path
 conda activate coloc-pipeline
 ```
-All SLURM scripts do this automatically. If submitting via `sbatch`, the script
-handles activation internally.
+All SLURM scripts call `source` and `conda activate` internally — they do **not**
+inherit your shell's conda state. If submitting via `sbatch`, the activation path
+is hardcoded in the script; update it if your conda lives elsewhere.
 
 ---
 
