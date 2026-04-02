@@ -25,8 +25,6 @@ include: "workflow/rules/stage2_overlaps.smk"
 include: "workflow/rules/stage3_coloc_abf.smk"
 include: "workflow/rules/stage4_coloc_susie.smk"
 include: "workflow/rules/stage5_postprocess.smk"
-include: "workflow/rules/test.smk"
-
 
 # Define output files
 rule all:

@@ -20,7 +20,8 @@ rule run_coloc_abf:
             config["sample_sizes"][wildcards.trait]["controls"]
         ],
         variant_ann=config["variant_annotation_file"],
-        qtl_nominal_dir=lambda wildcards: config["qtl_nominal_dirs"][wildcards.tissue]
+        qtl_nominal_dir=lambda wildcards: config["qtl_nominal_dirs"][wildcards.tissue],
+        qtl_data_path=config["qtl_data_path"]
     log:
         "{output_dir}/logs/coloc_abf_{trait}.{tissue}.log"
     conda:
