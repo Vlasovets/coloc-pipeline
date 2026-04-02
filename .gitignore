@@ -97,3 +97,4 @@ miniconda3/
 # !envs/*.yml            - Rule-specific envs (tracked)
 # !src/                  - Original reference code (tracked)
 # !workflow/             - Pipeline scripts (tracked)
+jobs/
