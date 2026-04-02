@@ -30,10 +30,10 @@ run_aggregation <- function(input_files, pp4_threshold, pp4_pp3_ratio) {
     if (file.exists(f) && file.size(f) > 0) {
       dt <- fread(f)
       if (!"tissue" %in% colnames(dt)) {
-        dt$tissue <- gsub(paste0(".*", GWAS_ID, "\\.([^.]+)\\.colocABF.*"), "\\1", basename(f))
+        dt$tissue <- sub("^[^.]+\\.(.+)\\.colocABF_results\\.txt$", "\\1", basename(f))
       }
       if (!"GWAS_ID" %in% colnames(dt)) {
-        dt$GWAS_ID <- GWAS_ID
+        dt$GWAS_ID <- sub("^([^.]+)\\..*", "\\1", basename(f))
       }
       return(dt)
     } else {
