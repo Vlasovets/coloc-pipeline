@@ -27,13 +27,13 @@ cat(sprintf("[%s] Reading %d coloc result files\n", Sys.time(), length(input_fil
 coloc_res <- rbindlist(lapply(input_files, function(f) {
   if(file.exists(f) && file.size(f) > 0) {
     dt <- fread(f)
-    # Extract tissue and GWAS_ID from filename if not in data
+    # Extract tissue and GWAS_ID from filename: {trait}.{tissue}.colocABF_results.txt
     if(!"tissue" %in% colnames(dt)) {
-      tissue <- gsub(".*colocABF_df_([^_]+)_.*", "\\1", basename(f))
+      tissue <- sub("^[^.]+\\.(.+)\\.colocABF_results\\.txt$", "\\1", basename(f))
       dt$tissue <- tissue
     }
     if(!"GWAS_ID" %in% colnames(dt)) {
-      gwas_id <- gsub(".*results_([^/]+)/.*", "\\1", f)
+      gwas_id <- sub("^([^.]+)\\..*", "\\1", basename(f))
       dt$GWAS_ID <- gwas_id
     }
     return(dt)

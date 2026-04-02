@@ -1,0 +1,262 @@
+Bootstrap: docker
+From: condaforge/mambaforge:latest
+
+%labels
+    Author oleg.vlasovets
+    Version 1.0
+    Description Colocalization pipeline for GWAS-QTL analysis with R and Snakemake
+    Pipeline https://gitlab.mpcdf.mpg.de/oleg.vlasovets/coloc-pipeline
+
+%help
+    Apptainer container for coloc-pipeline: GWAS-QTL colocalization analysis
+    
+    This container includes:
+    - R 4.3 with Bioconductor packages (VariantAnnotation, GenomicRanges, rtracklayer)
+    - R statistical packages (coloc, data.table, dplyr, ggplot2)
+    - Python 3.10+ with Snakemake workflow management
+    - Genomics tools (bcftools, tabix)
+    
+    Usage:
+      # Interactive shell
+      apptainer shell --bind /path/to/pipeline:/pipeline coloc-pipeline.sif
+      
+      # Run Snakemake
+      apptainer exec --bind /pipeline:/pipeline --bind /output:/output \\
+        coloc-pipeline.sif snakemake --cores 4
+      
+      # Run R script
+      apptainer exec coloc-pipeline.sif Rscript analysis.R
+    
+    Required bind mounts:
+      --bind /home/itg/oleg.vlasovets/projects/coloc-pipeline:/pipeline
+      --bind /lustre/scratch/users/oleg.vlasovets:/scratch
+      --bind /localscratch:/localscratch
+
+%environment
+    # Add both conda environments to PATH
+    # r_coloc first for R, bcftools, etc.; then coloc-pipeline for Snakemake
+    export PATH=/opt/conda/envs/r_coloc/bin:/opt/conda/envs/coloc-pipeline/bin:/opt/conda/bin:$PATH
+    
+    # R configuration matching SLURM script
+    export R_USER_CACHE_DIR=${TMPDIR:-/tmp}/R_cache
+    export R_USER_DATA_DIR=${TMPDIR:-/tmp}/R_data
+    export R_LIBS_USER=/opt/conda/envs/r_coloc/lib/R/library
+    export R_LIBS_SITE=/opt/conda/envs/r_coloc/lib/R/library
+    
+    # Prevent R from using user libraries (enforce container-only packages)
+    export R_LIBS=
+    
+    # Locale settings
+    export LC_ALL=C.UTF-8
+    export LANG=C.UTF-8
+    
+    #Snakemake configuration
+    export SNAKEMAKE_CONDA_PREFIX=/opt/conda/envs
+    
+    # Bioconductor settings (avoid runtime downloads)
+    export BIOCONDUCTOR_CONFIG_FILE=/dev/null
+    export BIOC_USE_DEVEL=FALSE
+
+%files
+    # Copy conda environment specifications to /opt (more reliable than /tmp)
+    # These will be used during %post to install packages
+    envs/r_coloc.yml /opt/r_coloc.yml
+    environment.yml /opt/environment.yml
+
+%post
+    # Note: mambaforge base image already has all necessary system libraries
+    # We only need conda to install R and Python packages
+    
+    # Set locale
+    export LC_ALL=C.UTF-8
+    export LANG=C.UTF-8
+    
+    # Initialize conda
+    echo "=== Initializing conda ==="
+    . /opt/conda/etc/profile.d/conda.sh
+    
+    # Update conda and mamba
+    conda update -n base -c conda-forge conda mamba -y
+    
+    # Create main Snakemake environment
+    echo "=== Creating Snakemake environment ==="
+    mamba env create -f /opt/environment.yml
+    
+    # Create R conda environment for pipeline rules
+    echo "=== Creating R colocalization environment ==="
+    mamba env create -f /opt/r_coloc.yml
+    
+    # Activate R environment to install additional packages
+    conda activate r_coloc
+    
+    # Install gwasvcf from GitHub (not available in conda)
+    echo "=== Installing gwasvcf from GitHub ==="
+    R --slave << 'RSCRIPT'
+# Set CRAN mirror
+options(repos = c(CRAN = "https://cloud.r-project.org/"))
+
+# Install gwasvcf if not already installed
+if (!require("gwasvcf", quietly = TRUE)) {
+    if (!require("BiocManager", quietly = TRUE)) {
+        install.packages("BiocManager")
+    }
+    
+    if (!require("remotes", quietly = TRUE)) {
+        install.packages("remotes")
+    }
+    
+    # Install gwasvcf from GitHub
+    remotes::install_github("MRCIEU/gwasvcf", upgrade = "never")
+}
+
+# Verify installation
+library(gwasvcf)
+cat("gwasvcf version:", as.character(packageVersion("gwasvcf")), "\n")
+
+# Install any other missing packages that might be needed
+packages_needed <- c(
+    "ggplot2",      # For plotting (stage 6)
+    "httr",         # For HTTP requests
+    "jsonlite",     # For JSON parsing
+    "Hmisc",        # Statistical functions
+    "susieR"        # For SuSiE fine-mapping (stage 4)
+)
+
+for (pkg in packages_needed) {
+    if (!require(pkg, character.only = TRUE, quietly = TRUE)) {
+        cat("Installing", pkg, "\n")
+        install.packages(pkg, quiet = TRUE)
+    }
+}
+
+# Verify all critical packages load
+cat("\n=== Verifying R package installation ===\n")
+required_packages <- c(
+    "data.table",
+    "VariantAnnotation",
+    "gwasvcf",
+    "GenomicRanges",
+    "dplyr",
+    "rtracklayer",
+    "coloc",
+    "magrittr",
+    "optparse",
+    "ggplot2",
+    "parallel"
+)
+
+for (pkg in required_packages) {
+    if (!require(pkg, character.only = TRUE, quietly = TRUE)) {
+        cat("ERROR: Package", pkg, "failed to install\n")
+        quit(status = 1)
+    } else {
+        cat("✓", pkg, "version", as.character(packageVersion(pkg)), "\n")
+    }
+}
+
+cat("\nAll R packages successfully installed!\n")
+RSCRIPT
+    
+    # Install bcftools and htslib for VCF processing
+    echo "=== Installing bcftools and genomics tools ==="
+    mamba install -y -c bioconda bcftools htslib tabix samtools
+    
+    # Verify installations
+    echo "=== Verifying tool installations ==="
+    R --version || exit 1
+    bcftools --version || exit 1
+    tabix --version || exit 1
+    
+    # Test snakemake from the coloc-pipeline environment
+    conda activate coloc-pipeline
+    python --version || exit 1
+    snakemake --version || exit 1
+    
+    # Clean up conda caches to reduce image size
+    echo "=== Cleaning up ==="
+    conda clean --all -y
+    rm -rf /opt/conda/pkgs/*
+    rm -f /opt/*.yml
+    
+    echo "=== Container build complete ==="
+
+%runscript
+    # Default: print usage information
+    cat << 'EOF'
+Colocalization Pipeline Container
+==================================
+
+Usage:
+  Snakemake workflow:
+    apptainer exec coloc-pipeline.sif snakemake [options]
+  
+  R analysis:
+    apptainer exec coloc-pipeline.sif Rscript script.R
+  
+  Interactive shell:
+    apptainer shell coloc-pipeline.sif
+
+Environment variables:
+  TMPDIR           - Temporary file location (default: /tmp)
+  R_USER_CACHE_DIR - R package cache (default: $TMPDIR/R_cache)
+  R_USER_DATA_DIR  - R data directory (default: $TMPDIR/R_data)
+
+See container help: apptainer run-help coloc-pipeline.sif
+EOF
+
+%test
+    # Verify critical components are installed and functional
+    # With updated %environment, all tools should be in PATH
+    
+    echo "=== Testing R installation ==="
+    R --version || exit 1
+    
+    echo "=== Testing Python and Snakemake ==="
+    python --version || exit 1
+    snakemake --version || exit 1
+    
+    echo "=== Testing genomics tools ==="
+    bcftools --version || exit 1
+    tabix --version || exit 1
+    
+    echo "=== Testing R packages ==="
+    R --slave << 'RSCRIPT'
+required_packages <- c(
+    "data.table",
+    "VariantAnnotation",
+    "gwasvcf",
+    "GenomicRanges",
+    "dplyr",
+    "rtracklayer",
+    "coloc",
+    "magrittr",
+    "optparse",
+    "ggplot2",
+    "BiocManager",
+    "remotes",
+    "arrow"
+)
+
+cat("\nTesting R package availability:\n")
+all_ok <- TRUE
+for (pkg in required_packages) {
+    if (require(pkg, character.only = TRUE, quietly = TRUE)) {
+        cat("✓", pkg, "\n")
+    } else {
+        cat("✗", pkg, "MISSING\n")
+        all_ok <- FALSE
+    }
+}
+
+if (!all_ok) {
+    cat("\nERROR: Some required packages are missing\n")
+    quit(status = 1)
+}
+
+cat("\nAll critical R packages available!\n")
+quit(status = 0)
+RSCRIPT
+    
+    echo "=== All tests passed ==="
+    
+    echo "=== All tests passed! ==="

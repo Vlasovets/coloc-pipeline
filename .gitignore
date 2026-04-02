@@ -21,6 +21,7 @@ logs/
 *.tbi
 *.parquet
 *.rda
+*.rds
 *.RData
 
 # Intermediate testing scripts
@@ -29,6 +30,28 @@ run_stage2.sh
 # Working documentation (keep local only)
 CONTINUE_PIPELINE.md
 REFACTORING_SUMMARY.md
+
+# ============================================
+# Container Files (large binaries, local builds)
+# ============================================
+*.sif
+*.simg
+containers/
+Miniforge3-*.sh
+
+# ============================================
+# Tutorial / Development Artifacts
+# ============================================
+Snakefile_tutorial
+workflow/rules/test.smk
+
+# ============================================
+# Local-only Markdown Docs (tracked selectively below)
+# ============================================
+markdown/*
+!markdown/PIPELINE_GUIDE.md
+!markdown/PIPELINE_STATUS.md
+!markdown/REPO_AUDIT.md
 
 # ============================================
 # R Specific
@@ -51,11 +74,14 @@ slurm-*.err
 # Temporary & System Files
 # ============================================
 *~
+*.tmp
 .DS_Store
 *.swp
 *.swo
 .vscode/
 .idea/
+__pycache__/
+*.pyc
 
 # ============================================
 # Conda Environments (installed locally)
@@ -71,3 +97,4 @@ miniconda3/
 # !envs/*.yml            - Rule-specific envs (tracked)
 # !src/                  - Original reference code (tracked)
 # !workflow/             - Pipeline scripts (tracked)
+jobs/
