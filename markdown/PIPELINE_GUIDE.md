@@ -127,6 +127,17 @@ coloc-pipeline/
 
 ## 3. Environment Setup
 
+> ⚠️ **Before running any commands in this guide, set these variables to match
+> your own username and directory structure.** The shared group data paths
+> (`/lustre/groups/itg/...`) do not need to change — they are accessible to
+> all ITG team members.
+>
+> ```bash
+> REPO="/home/<your_username>/projects/coloc-pipeline"
+> SCRATCH="/lustre/scratch/users/<your_username>/coloc-pipeline/results"
+> CONDA_INIT=~/miniconda3/etc/profile.d/conda.sh   # adjust to your conda path
+> ```
+
 > **For colleagues on the Helmholtz HPC:** Option 2 (Apptainer) is recommended
 > for reproducibility — the image is fully self-contained and requires no local
 > conda setup. If no image is available to you yet, use Option 1 (Conda) below.
@@ -145,10 +156,12 @@ This is the fallback approach. It requires conda to be installed on your account
 
 **Step 2: Create the pipeline environment**
 ```bash
-# Adjust the conda init path to match your installation:
-source ~/miniconda3/etc/profile.d/conda.sh   # or ~/miniforge3/etc/profile.d/conda.sh
+# Set these to match your own paths before running:
+REPO="/home/<your_username>/projects/coloc-pipeline"
+CONDA_INIT=~/miniconda3/etc/profile.d/conda.sh   # adjust to your conda path
 
-cd /home/<your_username>/projects/coloc-pipeline
+source $CONDA_INIT
+cd $REPO
 
 # Create the Snakemake orchestration environment from the repo file
 conda env create -f environment.yml
@@ -186,7 +199,12 @@ so no local conda setup is required.
 
 **Check if the image is accessible to you:**
 ```bash
-ls -lh /home/itg/oleg.vlasovets/projects/coloc-pipeline/coloc-pipeline.sif
+# Set these to match your own paths before running:
+REPO="/home/<your_username>/projects/coloc-pipeline"
+SCRATCH="/lustre/scratch/users/<your_username>/coloc-pipeline/results"
+
+# The image lives in the maintainer's repo; check if readable:
+ls -lh $REPO/coloc-pipeline.sif
 # -rwxr-xr-x 946M Mar 10 18:15 coloc-pipeline.sif
 ```
 
@@ -194,31 +212,38 @@ If you cannot access that path, copy it to your scratch space or rebuild (see be
 
 **Using the image:**
 ```bash
+# Set these to match your own paths before running:
+REPO="/home/<your_username>/projects/coloc-pipeline"
+SCRATCH="/lustre/scratch/users/<your_username>/coloc-pipeline/results"
+
 # Run an R script inside the container
 apptainer exec \
-  --bind /home/<your_username>/projects/coloc-pipeline:/pipeline \
-  --bind /lustre/scratch/users/<your_username>:/scratch \
-  /home/itg/oleg.vlasovets/projects/coloc-pipeline/coloc-pipeline.sif \
+  --bind $REPO:/pipeline \
+  --bind $(dirname $SCRATCH):/scratch \
+  $REPO/coloc-pipeline.sif \
   Rscript /pipeline/workflow/scripts/3_run_coloc_abf.R
 
 # Run Snakemake (all SLURM scripts activate the coloc-pipeline conda env
 # inside the container automatically via PATH in the image)
 apptainer exec \
-  --bind /home/<your_username>/projects/coloc-pipeline:/pipeline \
-  --bind /lustre/scratch/users/<your_username>:/scratch \
-  /home/itg/oleg.vlasovets/projects/coloc-pipeline/coloc-pipeline.sif \
+  --bind $REPO:/pipeline \
+  --bind $(dirname $SCRATCH):/scratch \
+  $REPO/coloc-pipeline.sif \
   snakemake --cores 4
 ```
 
 **Required bind mounts** (adjust paths for your username):
-- `--bind /home/<your_username>/projects/coloc-pipeline:/pipeline`
-- `--bind /lustre/scratch/users/<your_username>:/scratch`
+- `--bind $REPO:/pipeline`
+- `--bind $(dirname $SCRATCH):/scratch` (mounts `/lustre/scratch/users/<your_username>`)
 - `--bind /localscratch:/localscratch` (for TMPDIR on compute nodes)
 - Read-only group data is accessible directly (no bind needed on this cluster)
 
 **Rebuilding the image from scratch** (maintainer only — takes ~20–30 min):
 ```bash
-cd /home/itg/oleg.vlasovets/projects/coloc-pipeline
+# Set these to match your own paths before running:
+REPO="/home/<your_username>/projects/coloc-pipeline"
+
+cd $REPO
 apptainer build coloc-pipeline.sif coloc-pipeline.def
 ```
 
@@ -259,7 +284,7 @@ All parameters are in `config.yaml` at the repository root.
 ### Key parameters
 
 ```yaml
-output_dir: "/lustre/scratch/users/oleg.vlasovets/coloc-pipeline/results"
+output_dir: "/lustre/scratch/users/<your_username>/coloc-pipeline/results"  # update this
 
 traits:
   - KNEE
@@ -308,8 +333,13 @@ sample_sizes:
 For a trait/tissue combination where no outputs exist yet, use the main orchestrator:
 
 ```bash
-cd /home/itg/oleg.vlasovets/projects/coloc-pipeline
+# Set these to match your own paths before running:
+REPO="/home/<your_username>/projects/coloc-pipeline"
+CONDA_INIT=~/miniconda3/etc/profile.d/conda.sh   # adjust to your conda path
+
+source $CONDA_INIT
 conda activate coloc-pipeline
+cd $REPO
 sbatch scripts/submit_pipeline.sh KNEE
 ```
 
@@ -362,7 +392,8 @@ sbatch scripts/stage1_gwas_vcf.sh KNEE
 
 **Verify completion:**
 ```bash
-ls -lh /lustre/scratch/users/oleg.vlasovets/coloc-pipeline/results/gwas_vcf/KNEE_hg38.vcf.bgz*
+SCRATCH="/lustre/scratch/users/<your_username>/coloc-pipeline/results"
+ls -lh $SCRATCH/gwas_vcf/KNEE_hg38.vcf.bgz*
 # Expected: ~184M VCF + .tbi index
 ```
 
@@ -406,7 +437,8 @@ sbatch scripts/stage2_overlaps.sh KNEE "low_grade_cartilage synovium fat_pad"
 
 **Verify completion:**
 ```bash
-wc -l /lustre/scratch/users/oleg.vlasovets/coloc-pipeline/results/overlaps/KNEE.high_grade_cartilage.qtl_subset.txt
+SCRATCH="/lustre/scratch/users/<your_username>/coloc-pipeline/results"
+wc -l $SCRATCH/overlaps/KNEE.high_grade_cartilage.qtl_subset.txt
 # Expected: ~1,158 genes (plus header line)
 ```
 
@@ -455,7 +487,8 @@ sbatch scripts/stage3_only.sh KNEE high_grade_cartilage
 
 **Verify completion:**
 ```bash
-wc -l /lustre/scratch/users/oleg.vlasovets/coloc-pipeline/results/coloc_abf/KNEE.high_grade_cartilage.colocABF_results.txt
+SCRATCH="/lustre/scratch/users/<your_username>/coloc-pipeline/results"
+wc -l $SCRATCH/coloc_abf/KNEE.high_grade_cartilage.colocABF_results.txt
 # Expected: 2,287 + 1 header line
 ```
 
@@ -495,8 +528,9 @@ sbatch scripts/stage4_aggregate.sh KNEE
 
 **Verify completion:**
 ```bash
-wc -l /lustre/scratch/users/oleg.vlasovets/coloc-pipeline/results/results/KNEE_*coloc_results.txt
-head -2 /lustre/scratch/users/oleg.vlasovets/coloc-pipeline/results/results/KNEE_significant_coloc_results.txt
+SCRATCH="/lustre/scratch/users/<your_username>/coloc-pipeline/results"
+wc -l $SCRATCH/results/KNEE_*coloc_results.txt
+head -2 $SCRATCH/results/KNEE_significant_coloc_results.txt
 ```
 
 ---
@@ -528,14 +562,18 @@ sbatch scripts/stage4_aggregate.sh KNEE
 ### Checking progress
 
 ```bash
-# Queue status
-squeue -u oleg.vlasovets
+# Set these to match your own paths before running:
+REPO="/home/<your_username>/projects/coloc-pipeline"
+SCRATCH="/lustre/scratch/users/<your_username>/coloc-pipeline/results"
+
+# Queue status ($USER is a built-in shell variable — no change needed)
+squeue -u $USER
 
 # Pipeline output status
-bash scripts/check_status.sh KNEE
+bash $REPO/scripts/check_status.sh KNEE
 
 # Check individual tissue Stage 3 output
-ls -lh /lustre/scratch/users/oleg.vlasovets/coloc-pipeline/results/coloc_abf/KNEE.*.colocABF_results.txt
+ls -lh $SCRATCH/coloc_abf/KNEE.*.colocABF_results.txt
 ```
 
 ---
@@ -659,8 +697,12 @@ sbatch scripts/stage3_only.sh KNEE high_grade_cartilage
 **Fix:** All SLURM scripts run `snakemake --unlock` automatically before each job.
 If running manually:
 ```bash
-cd /home/itg/oleg.vlasovets/projects/coloc-pipeline
+REPO="/home/<your_username>/projects/coloc-pipeline"
+CONDA_INIT=~/miniconda3/etc/profile.d/conda.sh   # adjust to your conda path
+
+source $CONDA_INIT
 conda activate coloc-pipeline
+cd $REPO
 snakemake --unlock
 ```
 
@@ -674,7 +716,8 @@ snakemake --unlock
 
 **Diagnosis:** Check the Stage 2 log:
 ```bash
-cat /lustre/scratch/users/oleg.vlasovets/coloc-pipeline/results/logs/overlaps_KNEE.{tissue}.log | grep -E "ERROR|variants|region"
+SCRATCH="/lustre/scratch/users/<your_username>/coloc-pipeline/results"
+grep -E "ERROR|variants|region" $SCRATCH/logs/overlaps_KNEE.{tissue}.log
 ```
 
 ---
@@ -719,17 +762,21 @@ sbatch scripts/stage3_only.sh KNEE high_grade_cartilage
 ### Checking SLURM job logs
 
 ```bash
+# Set these to match your own paths before running:
+REPO="/home/<your_username>/projects/coloc-pipeline"
+SCRATCH="/lustre/scratch/users/<your_username>/coloc-pipeline/results"
+
 # List recent job logs
-ls -lt /home/itg/oleg.vlasovets/projects/coloc-pipeline/logs/ | head -20
+ls -lt $REPO/logs/ | head -20
 
 # View stdout for a specific job
-cat logs/stage3_34965770.out
+cat $REPO/logs/stage3_34965770.out
 
 # View stderr (Snakemake progress + R stderr)
-cat logs/stage3_34965770.err
+cat $REPO/logs/stage3_34965770.err
 
 # Check detailed R log from Snakemake (more verbose than SLURM logs)
-cat /lustre/scratch/users/oleg.vlasovets/coloc-pipeline/results/logs/coloc_abf_KNEE.high_grade_cartilage.log
+cat $SCRATCH/logs/coloc_abf_KNEE.high_grade_cartilage.log
 ```
 
 ---
