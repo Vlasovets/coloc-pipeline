@@ -19,11 +19,20 @@
   - fat_pad: 106 genes
 
 ### Stage 3: Coloc ABF Analysis
-- **Status**: ✓ Complete and tested (SLURM job 34965770)
+- **Status**: ✓ Complete — all 4 tissues (SLURM jobs 34965770, 34984512, 34984513, 34984514)
 - **Script**: `workflow/scripts/3_run_coloc_abf.R`
 - **Rule**: `workflow/rules/stage3_coloc_abf.smk`
 - **Test**: `tests/test_stage3.R` — PASSES (5/5 gene-signal pairs, all assertions green)
-- **Production run**: KNEE / high_grade_cartilage — 2,287 colocalization tests
+- **Production runs** (KNEE):
+
+  | Tissue | Tests | Runtime | Job |
+  |--------|-------|---------|-----|
+  | high_grade_cartilage | 2,287 | ~25 min | 34965770 |
+  | low_grade_cartilage | 3,175 | 33 min | 34984512 |
+  | synovium | 2,828 | 28 min | 34984513 |
+  | fat_pad | 225 | 10 min | 34984514 |
+  | **Total** | **8,515** | | |
+
 - **Key fixes applied** (branch `o-feature/stage-3-implementation`):
   1. Load `overlaps`/`gwas_windows`/`qtl_windows` from Stage 2 RDA (not `overlap_df`)
   2. Map `overlaps` columns → `perform_coloc()` format (`cpg.id`, `signal_gwas.*`)
@@ -33,14 +42,26 @@
   6. Create intermediate sumstats dirs before calling `perform_coloc()`
 
 ### Stage 4: Aggregate Results
-- **Status**: ✓ Complete and tested (SLURM job 34982216)
+- **Status**: ✓ Complete — all 4 tissues (SLURM jobs 34982216, 34984785)
 - **Script**: `workflow/scripts/5_postprocess_coloc.R`
 - **Rule**: `workflow/rules/stage5_postprocess.smk`
 - **Test**: `tests/test_stage4.R` — PASSES (Part A: 7/7 mock tests, Part B: 5/5 real data tests)
-- **Production run**: KNEE — 2,287 total tests, **54 significant colocalizations** (40 signals, 32 genes)
+- **Production run**: KNEE, all 4 tissues — 8,515 total tests, **211 significant colocalizations**
 - **Output**:
-  - `results/KNEE_all_coloc_results.txt` (2,287 rows)
-  - `results/KNEE_significant_coloc_results.txt` (54 rows)
+  - `results/KNEE_all_coloc_results.txt` (8,515 rows)
+  - `results/KNEE_significant_coloc_results.txt` (211 rows)
+- **Breakdown by tissue** (significant colocalizations):
+
+  | Tissue | Significant | 
+  |--------|-------------|
+  | high_grade_cartilage | 54 |
+  | low_grade_cartilage | 81 |
+  | synovium | 71 |
+  | fat_pad | 5 |
+  | **Total** | **211** |
+  | Unique GWAS signals | 93 |
+  | Unique genes | 78 |
+
 - **Key fixes applied**:
   1. Fixed tissue extraction regex: `sub("^[^.]+\\.(.+)\\.colocABF_results\\.txt$", "\\1", basename(f))`
   2. Fixed GWAS_ID extraction regex: `sub("^([^.]+)\\..*", "\\1", basename(f))`
@@ -68,12 +89,12 @@
 ## 📊 Current Pipeline Status
 
 ```
-Pipeline: KNEE / high_grade_cartilage
+Pipeline: KNEE / all 4 tissues
 
 Stage 1 (GWAS VCF):      ✓ Complete (184M, 11.3M SNPs)
 Stage 2 (Overlaps):      ✓ Complete (4/4 tissues, 4,342 total genes)
-Stage 3 (Coloc ABF):     ✓ Complete & tested (2,287 tests, job 34965770)
-Stage 4 (Aggregation):   ✓ Complete & tested (54 significant, job 34982216)
+Stage 3 (Coloc ABF):     ✓ Complete (8,515 tests across 4 tissues)
+Stage 4 (Aggregation):   ✓ Complete (211 significant, 93 signals, 78 genes)
 ```
 
 ## ⚠️ Remaining / Optional
@@ -85,17 +106,9 @@ Stage 4 (Aggregation):   ✓ Complete & tested (54 significant, job 34982216)
 
 ## 📝 Next Steps
 
-### Short-term (Extend to More Tissues):
-1. Run Stage 3 for remaining tissues: `low_grade_cartilage`, `synovium`, `fat_pad`
-   ```bash
-   sbatch scripts/stage3_only.sh KNEE low_grade_cartilage
-   sbatch scripts/stage3_only.sh KNEE synovium
-   sbatch scripts/stage3_only.sh KNEE fat_pad
-   ```
-2. Re-run Stage 4 to aggregate all tissues
-   ```bash
-   sbatch scripts/stage4_aggregate.sh KNEE
-   ```
+### Short-term:
+1. Merge `o-feature/stage-3-implementation` → `main` via PR
+2. Run pipeline for additional GWAS traits (ALLOA, TKR)
 
 ### Long-term (Enhancement):
 1. Add Stage 5 (SuSiE fine-mapping)
