@@ -219,8 +219,8 @@ results_list <- lapply(seq_len(nrow(susie_pairs)), function(i) {
   QTL[, A1  := ALT]
   QTL[, A2  := REF]
   QTL[, A1_freq := af]
-  QTL[, beta := b]
-  QTL[, se   := b_se]
+  QTL[, beta := slope]      # parquet column is 'slope', not 'b'
+  QTL[, se   := slope_se]   # parquet column is 'slope_se', not 'b_se'
   QTL[, p    := pval_nominal]
   QTL[, n    := QTL_n]
 
@@ -236,13 +236,11 @@ results_list <- lapply(seq_len(nrow(susie_pairs)), function(i) {
     cat(sprintf("  SKIP: no GWAS variants in window for %s\n", signal))
     return(NULL)
   }
-  GWAS_win[, SNP      := rsid]
-  GWAS_win[, A1       := ea]
-  GWAS_win[, A2       := nea]
-  GWAS_win[, A1_freq  := eaf]
-  GWAS_win[, beta     := beta]
-  GWAS_win[, se       := se]
-  GWAS_win[, p        := p]
+  GWAS_win[, SNP     := rsid]
+  GWAS_win[, A1      := ea]
+  GWAS_win[, A2      := nea]
+  GWAS_win[, A1_freq := eaf]
+  # beta, se, p already present in GWAS_associations
   if (type == "cc") {
     n_cases    <- GWAS_n[1]
     n_controls <- GWAS_n[2]
