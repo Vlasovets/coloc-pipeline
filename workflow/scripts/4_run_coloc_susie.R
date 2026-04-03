@@ -196,14 +196,15 @@ MHC <- data.frame(chr = 6, start = 28477797, end = 33448354)
 ###############################################################################
 # 6. Run SuSiE per gene-signal pair
 ###############################################################################
-susie_pairs <- unique(abf_susie[, .(cpg, gwas_signal)])
+susie_pairs <- unique(abf_susie[, .(cpg, gwas_signal, coloc_region_chr, coloc_region_start, coloc_region_end)])
 cat(sprintf("[%s] Running SuSiE for %d gene-signal pairs\n", Sys.time(), nrow(susie_pairs)))
 
 results_list <- lapply(seq_len(nrow(susie_pairs)), function(i) {
   gene    <- susie_pairs$cpg[i]
   signal  <- susie_pairs$gwas_signal[i]
-  # gwas_signal is e.g. "1:2319680" — extract chromosome for parquet lookup
-  signal_chr_from_locus <- as.integer(sub(":.*", "", signal))
+  signal_chr_from_locus <- susie_pairs$coloc_region_chr[i]
+  region_start          <- susie_pairs$coloc_region_start[i]
+  region_end            <- susie_pairs$coloc_region_end[i]
   fname   <- sprintf("%s_%s_mQTL_%s_GWAS_%s.txt", gene, signal, tissue, GWAS_ID)
 
   cat(sprintf("[%s] [%d/%d] %s — %s\n", Sys.time(), i, nrow(susie_pairs), gene, signal))
@@ -225,12 +226,10 @@ results_list <- lapply(seq_len(nrow(susie_pairs)), function(i) {
   QTL[, n    := QTL_n]
 
   # ── GWAS data for this signal ────────────────────────────────────────────
-  signal_pos <- as.integer(sub(".*:", "", sub("_.*", "", signal)))
-
   GWAS_win <- GWAS_associations[
     chr == signal_chr_from_locus &
-    position >= (signal_pos - 1e6) &
-    position <= (signal_pos + 1e6)
+    position >= region_start &
+    position <= region_end
   ]
   if (nrow(GWAS_win) == 0) {
     cat(sprintf("  SKIP: no GWAS variants in window for %s\n", signal))
