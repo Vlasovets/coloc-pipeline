@@ -3,7 +3,7 @@
 #SBATCH --output=logs/stage5_susie_%j.out
 #SBATCH --error=logs/stage5_susie_%j.err
 #SBATCH --time=08:00:00
-#SBATCH --mem=32G
+#SBATCH --mem=96G
 #SBATCH --cpus-per-task=2
 #SBATCH --partition=cpu_p
 #SBATCH --qos=cpu_normal

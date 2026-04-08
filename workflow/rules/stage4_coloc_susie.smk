@@ -33,7 +33,7 @@ rule run_coloc_susie:
         "../../envs/r_coloc.yml"
     threads: 2
     resources:
-        mem_mb=32000,
+        mem_mb=96000,
         time="08:00:00"
     script:
         "../scripts/4_run_coloc_susie.R"
