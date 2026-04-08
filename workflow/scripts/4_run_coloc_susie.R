@@ -21,15 +21,15 @@ source(file.path(snakemake@scriptdir, "coloc_helpers.R"))
 # Pipeline-compatible LD helpers (portable: accept ld_dir and plink_bin args)
 ###############################################################################
 
-#' Compute LD matrix from plink bfile for a set of variants
+#' Compute QTL LD matrix using variant_id (chr_pos_ref_alt_rsid) as plink ID
 #'
-#' @param snp_df  data.table with columns SNP (rsid), A2 (ref allele), pos
+#' @param snp_df  data.table with columns SNP (= variant_id), A2 (REF), pos
 #' @param chr     chromosome number
 #' @param fname   base filename for temp plink outputs
-#' @param bfile   plink bfile prefix (no extension)
+#' @param bfile   plink bfile prefix (no extension); bim uses chr_pos_ref_alt_rsid IDs
 #' @param ld_dir  output directory for plink LD files
 #' @param plink_bin  path to plink binary
-#' @return named LD matrix (SNP x SNP correlation) or NULL on failure
+#' @return named LD matrix (SNP x SNP correlation, names = variant_id) or NULL
 compute_ld_matrix <- function(snp_df, chr, fname, bfile, ld_dir, plink_bin) {
   dir.create(ld_dir, showWarnings = FALSE, recursive = TRUE)
   base   <- file.path(ld_dir, sub("\\.[^.]*$", "", fname))
@@ -74,6 +74,78 @@ compute_ld_matrix <- function(snp_df, chr, fname, bfile, ld_dir, plink_bin) {
 
   keep <- rownames(ld) %in% snp_df$SNP
   ld[keep, keep, drop = FALSE]
+}
+
+#' Compute GWAS LD matrix using a chr:bp range (avoids needing rsids in GWAS data)
+#'
+#' The UKB chip bfile uses rsids as variant IDs; GWAS summary stats may lack rsids.
+#' This function extracts all variants in the region from the bfile, then intersects
+#' by position+allele with the GWAS data to identify the matching variants.
+#'
+#' @param gwas_dt  data.table with chr, position, ea, nea columns (GWAS variants)
+#' @param chr      chromosome number (integer)
+#' @param bp_start region start (bp)
+#' @param bp_end   region end (bp)
+#' @param fname    base filename for temp plink outputs
+#' @param bfile    plink bfile prefix (bim uses rsids as variant IDs)
+#' @param ld_dir   output directory
+#' @param plink_bin path to plink binary
+#' @return list(ld = LD matrix, gwas_sub = matched GWAS variants) or NULL
+compute_gwas_ld_region <- function(gwas_dt, chr, bp_start, bp_end,
+                                   fname, bfile, ld_dir, plink_bin) {
+  dir.create(ld_dir, showWarnings = FALSE, recursive = TRUE)
+  base <- file.path(ld_dir, paste0("GWAS_", sub("\\.[^.]*$", "", fname)))
+  f_ld <- paste0(base, ".LD")
+
+  cmd <- paste(plink_bin,
+    "--bfile", bfile,
+    "--const-fid",
+    "--chr", chr,
+    "--from-bp", bp_start,
+    "--to-bp",   bp_end,
+    "--threads 1",
+    "--r square",
+    "--out", f_ld,
+    "--make-just-bim",
+    "--silent"
+  )
+  ret <- system(cmd, ignore.stdout = TRUE, ignore.stderr = TRUE)
+  if (ret != 0 || !file.exists(paste0(f_ld, ".ld"))) return(NULL)
+
+  bim <- tryCatch(
+    read.table(paste0(f_ld, ".bim"), header = FALSE,
+               col.names = c("chr", "snp_id", "cM", "position", "a1", "a2")),
+    error = function(e) NULL
+  )
+  if (is.null(bim) || nrow(bim) == 0) return(NULL)
+
+  ld <- tryCatch(
+    as.matrix(read.table(paste0(f_ld, ".ld"), header = FALSE)),
+    error = function(e) NULL
+  )
+  if (is.null(ld)) return(NULL)
+
+  colnames(ld) <- bim$snp_id
+  rownames(ld) <- bim$snp_id
+
+  # Match GWAS variants to bim by position + allele (ea/nea → a1/a2, either strand)
+  gwas_dt <- copy(gwas_dt)
+  gwas_dt[, match_key_fwd := paste(position, toupper(ea),  toupper(nea), sep = "_")]
+  gwas_dt[, match_key_rev := paste(position, toupper(nea), toupper(ea),  sep = "_")]
+  bim[, match_key := paste(position, toupper(a1), toupper(a2), sep = "_")]
+
+  gwas_dt[, snp_id := bim$snp_id[match(match_key_fwd, bim$match_key)]]
+  gwas_dt[is.na(snp_id),
+          snp_id := bim$snp_id[match(match_key_rev[is.na(snp_id)], bim$match_key)]]
+  gwas_dt <- gwas_dt[!is.na(snp_id) & snp_id %in% rownames(ld)]
+
+  if (nrow(gwas_dt) == 0) return(NULL)
+
+  keep <- rownames(ld) %in% gwas_dt$snp_id
+  list(
+    ld      = ld[keep, keep, drop = FALSE],
+    gwas_sub = gwas_dt
+  )
 }
 
 ###############################################################################
@@ -215,7 +287,9 @@ results_list <- lapply(seq_len(nrow(susie_pairs)), function(i) {
     cat(sprintf("  SKIP: no QTL variants for %s\n", gene))
     return(NULL)
   }
-  QTL[, SNP := rsid]
+  # SNP = variant_id (full bim ID: chr_pos_ref_alt_rsid) — required for plink --extract
+  # The QTL bim uses this format, not plain rsids
+  QTL[, SNP := variant_id]
   QTL[, ID  := variant_id]
   QTL[, A1  := ALT]
   QTL[, A2  := REF]
@@ -235,11 +309,7 @@ results_list <- lapply(seq_len(nrow(susie_pairs)), function(i) {
     cat(sprintf("  SKIP: no GWAS variants in window for %s\n", signal))
     return(NULL)
   }
-  GWAS_win[, SNP     := rsid]
-  GWAS_win[, A1      := ea]
-  GWAS_win[, A2      := nea]
   GWAS_win[, A1_freq := eaf]
-  # beta, se, p already present in GWAS_associations
   if (type == "cc") {
     n_cases    <- GWAS_n[1]
     n_controls <- GWAS_n[2]
@@ -249,7 +319,7 @@ results_list <- lapply(seq_len(nrow(susie_pairs)), function(i) {
     GWAS_win[, n := GWAS_n[1]]
   }
 
-  chr_n <- signal_chr_from_locus  # use signal chromosome, not QTL (avoids multi-chr issues)
+  chr_n <- signal_chr_from_locus
 
   # ── Skip MHC ─────────────────────────────────────────────────────────────
   if (chr_n == MHC$chr &&
@@ -258,38 +328,44 @@ results_list <- lapply(seq_len(nrow(susie_pairs)), function(i) {
     return(NULL)
   }
 
-  # ── Compute LD matrices with plink ───────────────────────────────────────
-  QTL_for_ld  <- data.frame(SNP = QTL$SNP,  A2 = QTL$A2,  pos = QTL$pos,
-                             stringsAsFactors = FALSE)
-  GWAS_for_ld <- data.frame(SNP = GWAS_win$SNP, A2 = GWAS_win$A2,
-                             pos = GWAS_win$position, stringsAsFactors = FALSE)
-  QTL_for_ld  <- QTL_for_ld[!duplicated(QTL_for_ld$SNP), ]
-  GWAS_for_ld <- GWAS_for_ld[!duplicated(GWAS_for_ld$SNP), ]
+  # ── QTL LD: extract by variant_id (full bim ID: chr_pos_ref_alt_rsid) ────
+  QTL_for_ld <- data.frame(SNP = QTL$SNP, A2 = QTL$A2, pos = QTL$pos,
+                            stringsAsFactors = FALSE)
+  QTL_for_ld <- QTL_for_ld[!duplicated(QTL_for_ld$SNP), ]
 
-  ld_qtl  <- compute_ld_matrix(QTL_for_ld,  chr_n, fname,
-                                bfile     = qtl_bfile,
-                                ld_dir    = ld_output_dir,
-                                plink_bin = plink_bin)
-
-  gwas_bfile <- paste0(gwas_bfile_prefix, chr_n)
-  ld_gwas <- compute_ld_matrix(GWAS_for_ld, chr_n,
-                                paste0("GWAS_", fname),
-                                bfile     = gwas_bfile,
-                                ld_dir    = ld_output_dir,
-                                plink_bin = plink_bin)
-
-  if (is.null(ld_qtl) || is.null(ld_gwas)) {
-    cat(sprintf("  SKIP: LD matrix is NULL (plink failed or no variants)\n"))
+  ld_qtl <- compute_ld_matrix(QTL_for_ld, chr_n, fname,
+                               bfile     = qtl_bfile,
+                               ld_dir    = ld_output_dir,
+                               plink_bin = plink_bin)
+  if (is.null(ld_qtl)) {
+    cat(sprintf("  SKIP: QTL LD matrix is NULL (plink failed or no variants)\n"))
     return(NULL)
   }
 
-  # ── Align QTL and GWAS to LD SNP sets ────────────────────────────────────
-  qtl_snps  <- rownames(ld_qtl)
-  gwas_snps <- rownames(ld_gwas)
-  QTL_sub   <- QTL[SNP %in% qtl_snps]
-  GWAS_sub  <- GWAS_win[SNP %in% gwas_snps]
-  GWAS_sub  <- GWAS_sub[!is.na(A1_freq)]
-  GWAS_sub  <- unique(GWAS_sub)
+  # ── GWAS LD: region-based extraction (UKB bfile uses rsids; GWAS data lacks them)
+  gwas_bfile <- paste0(gwas_bfile_prefix, chr_n)
+  gwas_ld_res <- compute_gwas_ld_region(
+    gwas_dt   = GWAS_win,
+    chr       = chr_n,
+    bp_start  = region_start,
+    bp_end    = region_end,
+    fname     = fname,
+    bfile     = gwas_bfile,
+    ld_dir    = ld_output_dir,
+    plink_bin = plink_bin
+  )
+  if (is.null(gwas_ld_res)) {
+    cat(sprintf("  SKIP: GWAS LD matrix is NULL (plink failed or no variants)\n"))
+    return(NULL)
+  }
+  ld_gwas  <- gwas_ld_res$ld
+  GWAS_sub <- gwas_ld_res$gwas_sub   # already matched to bim by position+allele
+
+  # ── Align QTL to LD SNP set ──────────────────────────────────────────────
+  qtl_snps <- rownames(ld_qtl)
+  QTL_sub  <- QTL[SNP %in% qtl_snps]
+  GWAS_sub <- GWAS_sub[!is.na(A1_freq)]
+  GWAS_sub <- unique(GWAS_sub)
 
   # ── Build coloc dataset lists ─────────────────────────────────────────────
   D1 <- list(
@@ -308,12 +384,12 @@ results_list <- lapply(seq_len(nrow(susie_pairs)), function(i) {
   g_snps <- rownames(ld_gwas)
   D2 <- list(
     N       = if (type == "cc") GWAS_sub$n[1] else GWAS_n[1],
-    MAF     = GWAS_sub$A1_freq[match(g_snps, GWAS_sub$SNP)],
-    beta    = GWAS_sub$beta[match(g_snps, GWAS_sub$SNP)],
-    varbeta = GWAS_sub$se[match(g_snps, GWAS_sub$SNP)]^2,
+    MAF     = GWAS_sub$A1_freq[match(g_snps, GWAS_sub$snp_id)],
+    beta    = GWAS_sub$beta[match(g_snps, GWAS_sub$snp_id)],
+    varbeta = GWAS_sub$se[match(g_snps, GWAS_sub$snp_id)]^2,
     type    = type,
     snp     = g_snps,
-    position= GWAS_sub$position[match(g_snps, GWAS_sub$SNP)],
+    position= GWAS_sub$position[match(g_snps, GWAS_sub$snp_id)],
     LD      = ld_gwas
   )
   D2$MAF <- ifelse(D2$MAF <= 0.5, D2$MAF, 1 - D2$MAF)
