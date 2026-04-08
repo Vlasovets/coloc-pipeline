@@ -386,47 +386,62 @@ results_list <- lapply(seq_len(nrow(susie_pairs)), function(i) {
   qtl_snps <- rownames(ld_qtl)
   QTL_sub  <- QTL[SNP %in% qtl_snps]
   GWAS_sub <- GWAS_sub[!is.na(A1_freq)]
-  GWAS_sub <- unique(GWAS_sub)
+  GWAS_sub <- GWAS_sub[!duplicated(snp_id)]  # ensure 1:1 snp_id → data row
+  # Keep only GWAS_sub rows whose snp_id is in the LD matrix
+  GWAS_sub <- GWAS_sub[snp_id %in% rownames(ld_gwas)]
+  # Trim LD to only matched GWAS variants
+  ld_gwas  <- ld_gwas[GWAS_sub$snp_id, GWAS_sub$snp_id, drop = FALSE]
+
+  cat(sprintf("  QTL: %d vars in LD, GWAS: %d vars in LD\n",
+              length(qtl_snps), nrow(GWAS_sub)))
 
   # ── Build coloc dataset lists ─────────────────────────────────────────────
+  # Order QTL_sub to match LD rownames exactly
+  QTL_sub <- QTL_sub[match(qtl_snps, SNP)]
   D1 <- list(
     N       = QTL_n,
-    MAF     = QTL_sub$A1_freq[match(qtl_snps, QTL_sub$SNP)],
-    beta    = QTL_sub$beta[match(qtl_snps, QTL_sub$SNP)],
-    varbeta = QTL_sub$se[match(qtl_snps, QTL_sub$SNP)]^2,
+    MAF     = QTL_sub$A1_freq,
+    beta    = QTL_sub$beta,
+    varbeta = QTL_sub$se^2,
     type    = "quant",
-    snp     = qtl_snps,
-    pvalue  = QTL_sub$p[match(qtl_snps, QTL_sub$SNP)],
-    position= QTL_sub$pos[match(qtl_snps, QTL_sub$SNP)],
+    snp     = QTL_sub$SNP,
+    pvalue  = QTL_sub$p,
+    position= QTL_sub$pos,
     LD      = ld_qtl
   )
   D1$MAF <- ifelse(D1$MAF <= 0.5, D1$MAF, 1 - D1$MAF)
 
-  g_snps <- rownames(ld_gwas)
+  # GWAS_sub rows are already in ld_gwas row order after the trim above
   D2 <- list(
     N       = if (type == "cc") GWAS_sub$n[1] else GWAS_n[1],
-    MAF     = GWAS_sub$A1_freq[match(g_snps, GWAS_sub$snp_id)],
-    beta    = GWAS_sub$beta[match(g_snps, GWAS_sub$snp_id)],
-    varbeta = GWAS_sub$se[match(g_snps, GWAS_sub$snp_id)]^2,
+    MAF     = GWAS_sub$A1_freq,
+    beta    = GWAS_sub$beta,
+    varbeta = GWAS_sub$se^2,
     type    = type,
-    snp     = g_snps,
-    position= GWAS_sub$position[match(g_snps, GWAS_sub$snp_id)],
+    snp     = GWAS_sub$snp_id,
+    position= GWAS_sub$position,
     LD      = ld_gwas
   )
   D2$MAF <- ifelse(D2$MAF <= 0.5, D2$MAF, 1 - D2$MAF)
   if (type == "cc") D2$s <- GWAS_sub$s[1]
 
-  # Remove NAs
-  keep1 <- !is.na(D1$MAF) & !is.na(D1$beta) & !is.na(D1$varbeta)
-  keep2 <- !is.na(D2$MAF) & !is.na(D2$beta) & !is.na(D2$varbeta)
+  # Remove NAs — must subset LD and all data vectors consistently
+  keep1 <- !is.na(D1$MAF) & !is.na(D1$beta) & !is.na(D1$varbeta) &
+           !is.na(D1$position)
+  keep2 <- !is.na(D2$MAF) & !is.na(D2$beta) & !is.na(D2$varbeta) &
+           !is.na(D2$position)
   for (field in c("MAF", "beta", "varbeta", "snp", "pvalue", "position")) {
     if (!is.null(D1[[field]])) D1[[field]] <- D1[[field]][keep1]
   }
-  D1$LD <- D1$LD[keep1, keep1]
+  D1$LD <- D1$LD[keep1, keep1, drop = FALSE]
   for (field in c("MAF", "beta", "varbeta", "snp", "position")) {
     if (!is.null(D2[[field]])) D2[[field]] <- D2[[field]][keep2]
   }
-  D2$LD <- D2$LD[keep2, keep2]
+  D2$LD <- D2$LD[keep2, keep2, drop = FALSE]
+
+  # Verify consistency: runsusie requires length(snp) == nrow(LD)
+  stopifnot(length(D1$snp) == nrow(D1$LD))
+  stopifnot(length(D2$snp) == nrow(D2$LD))
 
   if (length(D1$snp) < 5 || length(D2$snp) < 5) {
     cat(sprintf("  SKIP: too few variants after filtering (QTL: %d, GWAS: %d)\n",
