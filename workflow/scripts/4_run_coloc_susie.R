@@ -76,11 +76,13 @@ compute_ld_matrix <- function(snp_df, chr, fname, bfile, ld_dir, plink_bin) {
   ld[keep, keep, drop = FALSE]
 }
 
-#' Compute GWAS LD matrix using a chr:bp range (avoids needing rsids in GWAS data)
+#' Compute GWAS LD matrix using a two-step approach (avoids rsid requirement)
 #'
-#' The UKB chip bfile uses rsids as variant IDs; GWAS summary stats may lack rsids.
-#' This function extracts all variants in the region from the bfile, then intersects
-#' by position+allele with the GWAS data to identify the matching variants.
+#' Step 1: Extract region bim only (--make-just-bim, no LD) to get variant IDs+positions.
+#' Step 2: Match bim to GWAS_win by position+allele to identify relevant variants (~hundreds).
+#' Step 3: Extract only matched variants and compute --r square LD.
+#'
+#' This avoids computing a full LD matrix for all ~60K+ chip variants in a 2Mb window.
 #'
 #' @param gwas_dt  data.table with chr, position, ea, nea columns (GWAS variants)
 #' @param chr      chromosome number (integer)
@@ -94,22 +96,51 @@ compute_ld_matrix <- function(snp_df, chr, fname, bfile, ld_dir, plink_bin) {
 compute_gwas_ld_region <- function(gwas_dt, chr, bp_start, bp_end,
                                    fname, bfile, ld_dir, plink_bin) {
   dir.create(ld_dir, showWarnings = FALSE, recursive = TRUE)
-  base <- file.path(ld_dir, paste0("GWAS_", sub("\\.[^.]*$", "", fname)))
-  f_ld <- paste0(base, ".LD")
+  base      <- file.path(ld_dir, paste0("GWAS_", sub("\\.[^.]*$", "", fname)))
+  f_bim_tmp <- paste0(base, ".region")
+  f_ext     <- paste0(base, ".SNP.extract")
+  f_ld      <- paste0(base, ".LD")
 
-  cmd <- paste(plink_bin,
-    "--bfile", bfile,
-    "--const-fid",
-    "--chr", chr,
-    "--from-bp", bp_start,
-    "--to-bp",   bp_end,
-    "--threads 1",
-    "--r square",
-    "--out", f_ld,
-    "--make-just-bim",
-    "--silent"
+  # Step 1: Get bim for full region (no LD yet — cheap)
+  cmd1 <- paste(plink_bin,
+    "--bfile", bfile, "--const-fid",
+    "--chr", chr, "--from-bp", bp_start, "--to-bp", bp_end,
+    "--threads 1", "--make-just-bim",
+    "--out", f_bim_tmp, "--silent"
   )
-  ret <- system(cmd, ignore.stdout = TRUE, ignore.stderr = TRUE)
+  system(cmd1, ignore.stdout = TRUE, ignore.stderr = TRUE)
+
+  bim_full <- tryCatch(
+    read.table(paste0(f_bim_tmp, ".bim"), header = FALSE,
+               col.names = c("chr", "snp_id", "cM", "position", "a1", "a2")),
+    error = function(e) NULL
+  )
+  if (is.null(bim_full) || nrow(bim_full) == 0) return(NULL)
+
+  # Step 2: Match GWAS variants to bim by position + allele
+  gwas_dt <- copy(gwas_dt)
+  gwas_dt[, match_key_fwd := paste(position, toupper(ea),  toupper(nea), sep = "_")]
+  gwas_dt[, match_key_rev := paste(position, toupper(nea), toupper(ea),  sep = "_")]
+  bim_full[, match_key := paste(position, toupper(a1), toupper(a2), sep = "_")]
+
+  gwas_dt[, snp_id := bim_full$snp_id[match(match_key_fwd, bim_full$match_key)]]
+  gwas_dt[is.na(snp_id),
+          snp_id := bim_full$snp_id[match(match_key_rev[is.na(snp_id)], bim_full$match_key)]]
+  gwas_dt <- gwas_dt[!is.na(snp_id)]
+
+  if (nrow(gwas_dt) == 0) return(NULL)
+
+  # Step 3: Extract only matched variants and compute LD
+  write.table(gwas_dt$snp_id, f_ext,
+              col.names = FALSE, row.names = FALSE, sep = "\t", quote = FALSE)
+
+  cmd2 <- paste(plink_bin,
+    "--bfile", bfile, "--const-fid",
+    "--extract", f_ext,
+    "--threads 1", "--r square",
+    "--out", f_ld, "--make-just-bim", "--silent"
+  )
+  ret <- system(cmd2, ignore.stdout = TRUE, ignore.stderr = TRUE)
   if (ret != 0 || !file.exists(paste0(f_ld, ".ld"))) return(NULL)
 
   bim <- tryCatch(
@@ -117,7 +148,7 @@ compute_gwas_ld_region <- function(gwas_dt, chr, bp_start, bp_end,
                col.names = c("chr", "snp_id", "cM", "position", "a1", "a2")),
     error = function(e) NULL
   )
-  if (is.null(bim) || nrow(bim) == 0) return(NULL)
+  if (is.null(bim)) return(NULL)
 
   ld <- tryCatch(
     as.matrix(read.table(paste0(f_ld, ".ld"), header = FALSE)),
@@ -128,17 +159,7 @@ compute_gwas_ld_region <- function(gwas_dt, chr, bp_start, bp_end,
   colnames(ld) <- bim$snp_id
   rownames(ld) <- bim$snp_id
 
-  # Match GWAS variants to bim by position + allele (ea/nea → a1/a2, either strand)
-  gwas_dt <- copy(gwas_dt)
-  gwas_dt[, match_key_fwd := paste(position, toupper(ea),  toupper(nea), sep = "_")]
-  gwas_dt[, match_key_rev := paste(position, toupper(nea), toupper(ea),  sep = "_")]
-  bim[, match_key := paste(position, toupper(a1), toupper(a2), sep = "_")]
-
-  gwas_dt[, snp_id := bim$snp_id[match(match_key_fwd, bim$match_key)]]
-  gwas_dt[is.na(snp_id),
-          snp_id := bim$snp_id[match(match_key_rev[is.na(snp_id)], bim$match_key)]]
-  gwas_dt <- gwas_dt[!is.na(snp_id) & snp_id %in% rownames(ld)]
-
+  gwas_dt <- gwas_dt[snp_id %in% rownames(ld)]
   if (nrow(gwas_dt) == 0) return(NULL)
 
   keep <- rownames(ld) %in% gwas_dt$snp_id
