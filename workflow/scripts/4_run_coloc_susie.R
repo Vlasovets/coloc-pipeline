@@ -111,8 +111,8 @@ compute_gwas_ld_region <- function(gwas_dt, chr, bp_start, bp_end,
   system(cmd1, ignore.stdout = TRUE, ignore.stderr = TRUE)
 
   bim_full <- tryCatch(
-    read.table(paste0(f_bim_tmp, ".bim"), header = FALSE,
-               col.names = c("chr", "snp_id", "cM", "position", "a1", "a2")),
+    as.data.table(read.table(paste0(f_bim_tmp, ".bim"), header = FALSE,
+               col.names = c("chr", "snp_id", "cM", "position", "a1", "a2"))),
     error = function(e) NULL
   )
   if (is.null(bim_full) || nrow(bim_full) == 0) return(NULL)
@@ -144,8 +144,8 @@ compute_gwas_ld_region <- function(gwas_dt, chr, bp_start, bp_end,
   if (ret != 0 || !file.exists(paste0(f_ld, ".ld"))) return(NULL)
 
   bim <- tryCatch(
-    read.table(paste0(f_ld, ".bim"), header = FALSE,
-               col.names = c("chr", "snp_id", "cM", "position", "a1", "a2")),
+    as.data.table(read.table(paste0(f_ld, ".bim"), header = FALSE,
+               col.names = c("chr", "snp_id", "cM", "position", "a1", "a2"))),
     error = function(e) NULL
   )
   if (is.null(bim)) return(NULL)
