@@ -267,17 +267,14 @@ cat(sprintf("[%s] QTL data: %d variants across %d genes\n",
             Sys.time(), nrow(mqtl_df), length(unique(mqtl_df$gene_id))))
 
 ###############################################################################
-# 4. Load variant annotation for allele harmonisation
+# 4. Save data checkpoint (for fast re-runs / interactive debugging)
 ###############################################################################
-variant_ann <- fread(snakemake@params$variant_ann, data.table = FALSE)
-variant_ann$chr <- as.integer(variant_ann$chr)
-variant_ann <- variant_ann[!is.na(variant_ann$chr) &
-                             nchar(variant_ann$ref) == 1 &
-                             nchar(variant_ann$alt) == 1, ]
-if (!"variant_id_chrpos" %in% colnames(variant_ann)) {
-  variant_ann$variant_id_chrpos <- paste(variant_ann$chr, variant_ann$position,
-                                         variant_ann$alt, sep = "_")
-}
+checkpoint_file <- paste0(output_file, ".checkpoint.rds")
+saveRDS(list(GWAS_associations = GWAS_associations,
+             mqtl_df           = mqtl_df,
+             abf_susie         = abf_susie),
+        checkpoint_file)
+cat(sprintf("[%s] Checkpoint saved to %s\n", Sys.time(), checkpoint_file))
 
 ###############################################################################
 # 5. Set up LD output directory
