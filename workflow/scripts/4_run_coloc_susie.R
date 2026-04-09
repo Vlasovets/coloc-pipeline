@@ -510,17 +510,20 @@ results_list <- lapply(seq_len(nrow(susie_pairs)), function(i) {
   }
 
   res <- tryCatch({
-    sr <- coloc.susie(gwas_s, eqtl_s, p12 = 1e-05)
-    sr$summary$gene_id    <- gene
-    sr$summary$gwas_signal <- signal
-    sr$summary$tissue     <- tissue
-    sr$summary$GWAS_ID    <- GWAS_ID
-    sr$summary$Dataset    <- fname
-    sr$summary$H4_H3_ratio <- sr$summary$PP.H4.abf / sr$summary$PP.H3.abf
-    sr$summary$Colocalise  <- sr$summary$PP.H4.abf > 0.8 |
-      (sr$summary$PP.H4.abf > 0.6 & sr$summary$PP.H4.abf < 0.8 &
-         sr$summary$H4_H3_ratio > 2)
-    as.data.table(sr$summary)
+    sr  <- coloc.susie(gwas_s, eqtl_s, p12 = 1e-05)
+    # coloc.susie returns a data.table; use as.data.frame first to avoid
+    # data.table's $<- restriction inside tryCatch
+    smry <- as.data.frame(sr$summary)
+    smry$gene_id     <- gene
+    smry$gwas_signal <- signal
+    smry$tissue      <- tissue
+    smry$GWAS_ID     <- GWAS_ID
+    smry$Dataset     <- fname
+    smry$H4_H3_ratio <- smry$PP.H4.abf / smry$PP.H3.abf
+    smry$Colocalise  <- smry$PP.H4.abf > 0.8 |
+      (smry$PP.H4.abf > 0.6 & smry$PP.H4.abf < 0.8 &
+         smry$H4_H3_ratio > 2)
+    as.data.table(smry)
   }, error = function(e) {
     cat(sprintf("  coloc.susie error: %s\n", e$message))
     NULL
