@@ -56,15 +56,18 @@ QTL[, A2  := REF]; QTL[, A1 := ALT]
 QTL[, A1_freq := af]
 QTL[, beta := slope]; QTL[, se := slope_se]; QTL[, pval := pval_nominal]
 
-GWAS_win <- GWAS_associations[chr == p$coloc_region_chr &
-                               position >= p$coloc_region_start &
-                               position <= p$coloc_region_end]
+pair_chr   <- p$coloc_region_chr
+pair_start <- p$coloc_region_start
+pair_end   <- p$coloc_region_end
+GWAS_win <- GWAS_associations[chr == pair_chr &
+                               position >= pair_start &
+                               position <= pair_end]
 cat(sprintf("  GWAS variants in window: %d\n", nrow(GWAS_win)))
 GWAS_win[, A1_freq := eaf]
 GWAS_win[, n := sum(GWAS_N)]
 GWAS_win[, s := GWAS_N["cases"] / sum(GWAS_N)]
 
-chr_n <- p$coloc_region_chr
+chr_n <- pair_chr
 
 # ── QTL plink LD ─────────────────────────────────────────────────────────────
 dir.create(LD_DIR, showWarnings = FALSE, recursive = TRUE)
