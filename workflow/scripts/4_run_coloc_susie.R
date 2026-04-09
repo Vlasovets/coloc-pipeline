@@ -305,10 +305,16 @@ results_list <- lapply(seq_len(nrow(susie_pairs)), function(i) {
 
   cat(sprintf("[%s] [%d/%d] %s — %s\n", Sys.time(), i, nrow(susie_pairs), gene, signal))
 
-  # ── QTL data for this gene ──────────────────────────────────────────────
-  QTL <- mqtl_df[gene_id == gene]
+  # ── QTL data for this gene, restricted to the coloc region ────────────
+  # Restrict to the same region used for GWAS LD to keep D1/D2 symmetric.
+  # Using all ~4000 cis-window variants inflates the region and makes SuSiE
+  # unable to form credible sets (prior too diffuse; signal strength diluted).
+  QTL <- mqtl_df[gene_id == gene &
+                 pos >= region_start &
+                 pos <= region_end]
   if (nrow(QTL) == 0) {
-    cat(sprintf("  SKIP: no QTL variants for %s\n", gene))
+    cat(sprintf("  SKIP: no QTL variants in region %s:%d-%d for %s\n",
+                signal_chr_from_locus, region_start, region_end, gene))
     return(NULL)
   }
   # SNP = variant_id (full bim ID: chr_pos_ref_alt_rsid) — required for plink --extract
