@@ -531,7 +531,11 @@ results_list <- lapply(seq_len(nrow(susie_pairs)), function(i) {
     return(NULL)
   }
 
-  sr <- try(coloc.susie(gwas_s, eqtl_s, p12 = 1e-05), silent = TRUE)
+  # overlap.min=0: disable the trim_by_posterior filter in coloc.bf_bf.
+  # Default (0.5) requires >50% of posterior mass on shared SNPs, which
+  # fails when QTL PIPs are spread across many variants in a large window.
+  sr <- try(coloc.susie(gwas_s, eqtl_s, p12 = 1e-05, overlap.min = 0),
+            silent = TRUE)
   if (inherits(sr, "try-error")) {
     cat(sprintf("  coloc.susie error: %s\n",
                 conditionMessage(attr(sr, "condition"))))
