@@ -69,6 +69,9 @@ compute_ld_matrix <- function(snp_df, chr, fname, bfile, ld_dir, plink_bin) {
   )
   if (is.null(ld)) return(NULL)
 
+  ld[is.nan(ld) | is.na(ld)] <- 0  # plink writes nan for monomorphic variants
+  diag(ld) <- 1                     # ensure self-correlation is always 1
+
   colnames(ld) <- bim$rsid
   rownames(ld) <- bim$rsid
 
@@ -155,6 +158,9 @@ compute_gwas_ld_region <- function(gwas_dt, chr, bp_start, bp_end,
     error = function(e) NULL
   )
   if (is.null(ld)) return(NULL)
+
+  ld[is.nan(ld) | is.na(ld)] <- 0  # plink writes nan for monomorphic variants
+  diag(ld) <- 1
 
   colnames(ld) <- bim$snp_id
   rownames(ld) <- bim$snp_id
