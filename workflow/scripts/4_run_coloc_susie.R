@@ -509,10 +509,15 @@ results_list <- lapply(seq_len(nrow(susie_pairs)), function(i) {
     return(NULL)
   }
 
-  res <- tryCatch({
-    sr  <- coloc.susie(gwas_s, eqtl_s, p12 = 1e-05)
-    # coloc.susie returns a data.table; use as.data.frame first to avoid
-    # data.table's $<- restriction inside tryCatch
+  # coloc.susie uses data.table := internally. tryCatch() creates a new
+  # evaluation frame that breaks data.table's := detection. Use try()
+  # instead, which evaluates in the calling frame.
+  sr <- try(coloc.susie(gwas_s, eqtl_s, p12 = 1e-05), silent = TRUE)
+  if (inherits(sr, "try-error")) {
+    cat(sprintf("  coloc.susie error: %s\n",
+                conditionMessage(attr(sr, "condition"))))
+    res <- NULL
+  } else {
     smry <- as.data.frame(sr$summary)
     smry$gene_id     <- gene
     smry$gwas_signal <- signal
@@ -523,11 +528,8 @@ results_list <- lapply(seq_len(nrow(susie_pairs)), function(i) {
     smry$Colocalise  <- smry$PP.H4.abf > 0.8 |
       (smry$PP.H4.abf > 0.6 & smry$PP.H4.abf < 0.8 &
          smry$H4_H3_ratio > 2)
-    as.data.table(smry)
-  }, error = function(e) {
-    cat(sprintf("  coloc.susie error: %s\n", e$message))
-    NULL
-  })
+    res <- as.data.table(smry)
+  }
 
   return(res)
 })
