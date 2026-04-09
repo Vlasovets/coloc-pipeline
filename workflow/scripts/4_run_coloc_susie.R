@@ -537,6 +537,13 @@ results_list <- lapply(seq_len(nrow(susie_pairs)), function(i) {
                 conditionMessage(attr(sr, "condition"))))
     res <- NULL
   } else {
+    cat(sprintf("  coloc.susie OK — summary class: %s  nrow: %d  cols: %s\n",
+                paste(class(sr$summary), collapse="/"),
+                ifelse(is.data.frame(sr$summary), nrow(sr$summary), NA),
+                paste(names(sr$summary), collapse=",")))
+    if (is.data.frame(sr$summary) && nrow(sr$summary) > 0)
+      cat(sprintf("  PP.H4 values: %s\n",
+                  paste(round(sr$summary$PP.H4.abf, 4), collapse=",")))
     smry <- as.data.frame(sr$summary)
     smry$gene_id     <- gene
     smry$gwas_signal <- signal
