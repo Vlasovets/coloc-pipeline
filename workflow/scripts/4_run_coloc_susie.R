@@ -403,6 +403,11 @@ results_list <- lapply(seq_len(nrow(susie_pairs)), function(i) {
 
   cat(sprintf("  QTL: %d vars in LD, GWAS: %d vars in LD\n",
               length(qtl_snps), nrow(GWAS_sub)))
+  # Diagnostic: signal strength
+  qtl_z  <- abs(QTL_sub$beta / QTL_sub$se)
+  gwas_z <- abs(GWAS_sub$beta / GWAS_sub$se)
+  cat(sprintf("  QTL top |z|: %.2f  GWAS top |z|: %.2f\n",
+              max(qtl_z, na.rm=TRUE), max(gwas_z, na.rm=TRUE)))
 
   # ── Build coloc dataset lists ─────────────────────────────────────────────
   # Order QTL_sub to match LD rownames exactly
@@ -493,6 +498,12 @@ results_list <- lapply(seq_len(nrow(susie_pairs)), function(i) {
     cat(sprintf("  SKIP: SuSiE did not converge for both datasets\n"))
     return(NULL)
   }
+  qtl_pip_max  <- if (inherits(eqtl_s,"susie")) max(eqtl_s$pip,  na.rm=TRUE) else NA
+  gwas_pip_max <- if (inherits(gwas_s, "susie")) max(gwas_s$pip, na.rm=TRUE) else NA
+  cat(sprintf("  QTL max PIP: %.4f  GWAS max PIP: %.4f  QTL CS: %s  GWAS CS: %s\n",
+              qtl_pip_max, gwas_pip_max,
+              ifelse(is.null(eqtl_s$sets$cs), "NULL", length(eqtl_s$sets$cs)),
+              ifelse(is.null(gwas_s$sets$cs),  "NULL", length(gwas_s$sets$cs))))
   if (is.null(eqtl_s$sets$cs) || is.null(gwas_s$sets$cs)) {
     cat(sprintf("  SKIP: no credible sets found\n"))
     return(NULL)
