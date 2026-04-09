@@ -509,9 +509,28 @@ results_list <- lapply(seq_len(nrow(susie_pairs)), function(i) {
     return(NULL)
   }
 
-  # coloc.susie uses data.table := internally. tryCatch() creates a new
-  # evaluation frame that breaks data.table's := detection. Use try()
-  # instead, which evaluates in the calling frame.
+  # ── Harmonise lbf_variable column names before coloc.susie ───────────────
+  # QTL snp names: chr_pos_REF_ALT_rsid  (from variant_id in QTL bim)
+  # GWAS snp names: plain rsid           (from UKB chip bim)
+  # coloc.susie uses intersect(colnames(bf1), colnames(bf2)) to find shared
+  # SNPs. With 0 overlap it returns data.table(nsnps=NA) and the downstream
+  # := call crashes. Fix: rename both to "pos_NNNNN" positional keys.
+  qtl_pos_key <- paste0("pos_",
+    sub("^[^_]+_([0-9]+)_.*", "\\1", colnames(eqtl_s$lbf_variable)))
+  colnames(eqtl_s$lbf_variable) <- qtl_pos_key
+
+  # For GWAS, look up position from GWAS_sub (snp_id → position)
+  gwas_pos_key <- paste0("pos_",
+    GWAS_sub$position[match(colnames(gwas_s$lbf_variable), GWAS_sub$snp_id)])
+  colnames(gwas_s$lbf_variable) <- gwas_pos_key
+
+  n_shared <- length(intersect(qtl_pos_key, gwas_pos_key))
+  cat(sprintf("  Shared positional SNPs for coloc.susie: %d\n", n_shared))
+  if (n_shared == 0) {
+    cat(sprintf("  SKIP: no positional overlap between QTL and GWAS lbf matrices\n"))
+    return(NULL)
+  }
+
   sr <- try(coloc.susie(gwas_s, eqtl_s, p12 = 1e-05), silent = TRUE)
   if (inherits(sr, "try-error")) {
     cat(sprintf("  coloc.susie error: %s\n",
