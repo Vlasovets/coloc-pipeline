@@ -117,7 +117,7 @@ make_vcf(
   WantToLiftOver = liftover,
   GWAS_n = gwas_n,
   variant_ann = variant_ann,
-  output = gsub("\\.gz$", "", output_vcf)  # Remove .gz if present, make_vcf handles compression
+  output = gsub("\\.(b?gz)$", "", output_vcf)  # Strip .gz or .bgz — writeVcf adds .bgz itself
 )
 
 message("\n========================================")
