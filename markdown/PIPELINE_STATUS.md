@@ -36,15 +36,15 @@
   | fat_pad | 225 | 10 min | 34984514 |
   | **Total** | **8,515** | | |
 
-### Stage 4: Aggregate Results
+### Stage 4: Aggregate Results (ABF)
 - **Status**: ✓ Complete — all 4 tissues (SLURM jobs 34982216, 34984785)
 - **Script**: `workflow/scripts/5_postprocess_coloc.R`
 - **Rule**: `workflow/rules/stage5_postprocess.smk`
 - **Test**: `tests/test_stage4.R` — PASSES (Part A: 7/7, Part B: 5/5)
 - **Production run**: KNEE, all 4 tissues — **211 significant colocalizations**
 
-  | Tissue | Significant |
-  |--------|-------------|
+  | Tissue | Significant (PP4≥0.8) |
+  |--------|----------------------|
   | high_grade_cartilage | 54 |
   | low_grade_cartilage | 81 |
   | synovium | 71 |
@@ -58,19 +58,28 @@
   - `results/KNEE_significant_coloc_results.txt` (211 rows)
 
 ### Stage 5: Coloc SuSiE Fine-mapping
-- **Status**: ✓ Implemented — ready to submit (not yet run in production)
+- **Status**: ✓ Complete for KNEE (all 4 tissues)
 - **Script**: `workflow/scripts/4_run_coloc_susie.R`
 - **Rule**: `workflow/rules/stage4_coloc_susie.smk`
-- **Test**: `tests/test_stage5_smoke.R` — PASSES (7/7 smoke checks on interactive node)
-- **Candidates** (KNEE/high_grade_cartilage): 132 out of 2,287 ABF tests qualify (PP4 0.25–0.8)
-- **Requires**: tissue-specific plink bfiles + UKB LD reference (accessible from SLURM)
-- **Submit**:
-  ```bash
-  sbatch scripts/stage5_susie.sh KNEE high_grade_cartilage
-  sbatch scripts/stage5_susie.sh KNEE low_grade_cartilage
-  sbatch scripts/stage5_susie.sh KNEE synovium
-  sbatch scripts/stage5_susie.sh KNEE fat_pad
-  ```
+- **Key fixes required** (see `CLAUDE.md` for details):
+  - Filter QTL to coloc_region before SuSiE (not full cis-window)
+  - Rename lbf_variable columns to positional keys (`pos_NNNNN`) before `coloc.susie()`
+  - Pass `overlap.min=0` to disable posterior trimming filter
+- **Production runs** (KNEE):
+
+  | Tissue | Pairs tested | Results | Colocalise=TRUE (PP.H4>0.8) | Jobs |
+  |--------|-------------|---------|----------------------------|------|
+  | synovium | 11/50 | 19 | 10 | 35053371 |
+  | high_grade_cartilage | 9/72 | 19 | 1 | 35164360 |
+  | low_grade_cartilage | 14/68 | 25 | 4 | 35164361 |
+  | fat_pad | 0 candidates | — | — | 35165852 |
+  | **Total** | | **63** | **15** | |
+
+- **Notable KNEE SuSiE hits**:
+  - `ENSG00000176371 / rs11633450` — colocates in all 3 tissues (PP.H4 ≥ 0.83)
+  - `ENSG00000257815 / rs1152966` (synovium) — PP.H4 = 0.9999
+  - `ENSG00000180155 / rs1114761` (low_grade_cartilage) — PP.H4 up to 0.995
+  - `ENSG00000171368 / rs11749927` (synovium) — PP.H4 = 0.78
 
 ### Modular Snakemake Pipeline
 - **Status**: ✓ Complete
@@ -82,21 +91,32 @@
   `stage3_only.sh`, `stage4_aggregate.sh`, `stage5_susie.sh`,
   `submit_pipeline.sh`, `check_status.sh`, `clean.sh`
 
-## 📊 Current Pipeline Status
+---
+
+## 📊 Current Pipeline Status (2026-04-14)
 
 ```
-Pipeline: KNEE / all 4 tissues
+KNEE / all 4 tissues
+  Stage 1 (GWAS VCF):    ✓ Complete (184M, 11.3M SNPs)
+  Stage 2 (Overlaps):    ✓ Complete (4/4 tissues, 4,342 total genes)
+  Stage 3 (Coloc ABF):   ✓ Complete (8,515 tests across 4 tissues)
+  Stage 4 (Aggregation): ✓ Complete (211 significant, 93 signals, 78 genes)
+  Stage 5 (SuSiE):       ✓ Complete (63 results, 15 Colocalise=TRUE)
 
-Stage 1 (GWAS VCF):      ✓ Complete (184M, 11.3M SNPs)
-Stage 2 (Overlaps):      ✓ Complete (4/4 tissues, 4,342 total genes)
-Stage 3 (Coloc ABF):     ✓ Complete (8,515 tests across 4 tissues)
-Stage 4 (Aggregation):   ✓ Complete (211 significant, 93 signals, 78 genes)
-Stage 5 (SuSiE):         ⏳ Implemented, not yet submitted (132 candidates for hgc)
+TKR / all 4 tissues
+  Stage 1–4 (pipeline):  ⏳ Running — SLURM job 35165853
+  Stage 5 (SuSiE):       ⏳ Pending — jobs 35165940–35165943 (dependency on 35165853)
+
+ALLOA / all 4 tissues
+  Stage 1–4 (pipeline):  ⏳ Running — SLURM job 35165854
+  Stage 5 (SuSiE):       ⏳ Pending — jobs 35165944–35165947 (dependency on 35165854)
 ```
+
+---
 
 ## 📝 Next Steps
 
-1. Submit Stage 5 (SuSiE) for all tissues: `sbatch scripts/stage5_susie.sh KNEE <tissue>`
-2. Merge `o-feature/stage-3-implementation` → `main` via PR
-3. Run pipeline for additional GWAS traits (ALLOA, TKR)
-4. Add visualization/summary plots (`workflow/scripts/6_generate_plots.R`)
+1. **Post-processing**: After TKR/ALLOA Stage 5 completes, create combined final output
+   merging ABF and SuSiE results across all 3 traits and 4 tissues
+2. **Merge branch**: `o-feature/stage-3-implementation` → `main` via PR
+3. **Visualization**: Add locus zoom plots (`workflow/scripts/6_generate_plots.R`)
