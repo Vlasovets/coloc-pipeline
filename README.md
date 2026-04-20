@@ -1,139 +1,227 @@
 # Colocalization Pipeline
 
-Automated pipeline for colocalization analysis between GWAS and molecular QTL summary statistics.
+A Snakemake pipeline for colocalization analysis between GWAS summary statistics and
+tissue-specific eQTLs. Developed for osteoarthritis GWAS × joint-tissue eQTL analysis
+at the Zeggini lab / ITG, Helmholtz Munich.
+
+---
 
 ## Overview
 
-This pipeline performs two-sample Mendelian randomization and colocalization analysis between GWAS summary statistics and molecular QTL data generated from fastQTL/tensorQTL.
+The pipeline tests whether GWAS signals co-localize with eQTLs using two complementary methods:
 
-## Requirements
+- **Coloc ABF** (`coloc.abf`) — Approximate Bayes Factor method for genome-wide screening
+- **Coloc SuSiE** (`coloc.susie`) — fine-mapping for ambiguous regions with potential multiple causal variants
 
-- GWAS summary statistics (hg19 or hg38)
-- Table of GWAS significant independent signals
-- Full molecular QTL summary statistics (fastQTL/tensorQTL format)
-- Permutation results from fastQTL/tensorQTL
-- Reference genotype file for LD calculations
+A locus is flagged as co-localizing when PP4 ≥ 0.8 (strong) or PP4 > 0.6 AND PP4/PP3 > 2 (moderate).
+Ambiguous ABF results (0.25 ≤ PP4 < 0.8) are resolved by SuSiE where credible sets are available.
+
+### Applied to
+
+| Trait | Cases | Controls | Description |
+|-------|------:|--------:|-------------|
+| KNEE | 172,256 | 1,144,244 | Knee osteoarthritis |
+| TKR | 48,161 | 958,463 | Total knee replacement |
+| ALLOA | 489,952 | 1,471,094 | All osteoarthritis |
+
+| Tissue | eQTL N |
+|--------|-------:|
+| high_grade_cartilage | 115 |
+| low_grade_cartilage | 113 |
+| synovium | 109 |
+| fat_pad | 97 |
+
+### Results summary
+
+| Trait | Colocalizations (ABF+SuSiE) |
+|-------|--------------------------:|
+| KNEE | 168 |
+| TKR | 174 |
+| ALLOA | 200 |
+
+---
 
 ## Pipeline Stages
 
-1. **GWAS VCF Conversion**: Convert GWAS summary statistics to standardized VCF format with liftover (hg19→hg38)
-2. **QTL-GWAS Overlap Detection**: Identify QTL-GWAS overlapping regions (±1Mb windows)
-3. **Colocalization (ABF)**: Run coloc.abf for overlapping regions
-4. **Colocalization (SuSiE)**: Run coloc.SuSiE for ambiguous cases (multiple causal variants)
-5. **Result Aggregation**: Combine and summarize results across tissues
-6. **Visualization**: Generate locus zoom plots
-
-## Usage
-
-### Quick Start with Automatic Checkpoints
-
-The pipeline uses **automatic checkpoints** - it will skip completed stages and resume from the last successful step.
-
-#### Submit to SLURM Cluster
-```bash
-sbatch submit_pipeline.sh
+```
+GWAS sumstats
+     │
+     ▼
+Stage 1: GWAS VCF conversion          [~1–2 h]
+  liftover hg19→hg38, allele harmonization
+     │
+     ▼  results/gwas_vcf/{trait}_hg38.vcf.bgz
+     │
+Stage 2: QTL-GWAS overlap detection   [~2 h per tissue]
+  GenomicRanges ±1 Mb windows, VCF extraction
+     │
+     ▼  results/overlaps/{trait}.{tissue}.*
+     │
+Stage 3: Coloc ABF                    [~25–35 min per tissue]
+  coloc.abf, mclapply × 4 cores
+     │
+     ▼  results/coloc_abf/{trait}.{tissue}.colocABF_results.txt
+     │
+Stage 4: Aggregate ABF results        [~1 min]
+  combine tissues, filter by threshold
+     │
+     ├── results/results/{trait}_all_coloc_results.txt
+     └── results/results/{trait}_significant_coloc_results.txt
+     │
+Stage 5: Coloc SuSiE fine-mapping     [~30 min per tissue]
+  runsusie + coloc.susie for ambiguous ABF pairs (PP4 0.25–0.8)
+     │
+     ▼  results/coloc_susie/{trait}.{tissue}.colocSuSiE_results.txt
+     │
+Stage 7: Combine ABF + SuSiE          [~1 min]
+  final decision: strong ABF → ABF; ambiguous → SuSiE; fallback → ABF
+     │
+     ├── results/results/{trait}_combined_coloc_results.txt
+     └── results/results/{trait}_combined_significant.txt
 ```
 
-#### Run Locally (Interactive Mode)
-```bash
-bash run_pipeline_local.sh
-```
+---
 
-### Check Pipeline Progress
-```bash
-bash check_pipeline_status.sh
-```
+## Requirements
 
-This shows:
-- Completed stages (✓)
-- Pending stages (✗)
-- Number of genes/tests per tissue
-- Recent activity
+- GWAS summary statistics (hg19 or hg38, gzipped TSV)
+- GWAS independent signals file (CSV, hg38)
+- eQTL permutation results (`egenes_df.txt`) per tissue
+- eQTL nominal results (parquet files, one per chromosome) per tissue
+- Variant annotation file (hg38, biallelic SNPs)
+- Reference genotype files for LD calculation (plink bfile format)
+- SLURM cluster with conda
 
-### Resume After Failure
+---
 
-Simply rerun the same command - Snakemake will automatically:
-- Skip completed steps (based on output file timestamps)
-- Resume from last successful stage
-- Rerun only failed/incomplete jobs
+## Quick Start
+
+### 1. Configure
 
 ```bash
-# Pipeline stopped? Just rerun:
-sbatch submit_pipeline.sh
+cp config.yaml.example config.yaml
+# Edit paths, traits, tissues, and sample sizes
 ```
 
-### Dry Run (Preview Without Execution)
+### 2. Submit full pipeline for a trait
+
 ```bash
-snakemake --dry-run -n
+cd /path/to/coloc-pipeline
+
+# Stage 1 — GWAS VCF conversion
+sbatch scripts/stage1_gwas_vcf.sh KNEE
+
+# Stage 2 — QTL-GWAS overlaps (after Stage 1)
+sbatch scripts/stage2_overlaps.sh KNEE
+
+# Stage 3 — Coloc ABF, one job per tissue (after Stage 2)
+sbatch --mem=64G scripts/stage3_coloc_abf.sh KNEE high_grade_cartilage
+sbatch --mem=64G scripts/stage3_coloc_abf.sh KNEE low_grade_cartilage
+sbatch --mem=64G scripts/stage3_coloc_abf.sh KNEE synovium
+sbatch --mem=64G scripts/stage3_coloc_abf.sh KNEE fat_pad
+
+# Stage 4 — Aggregate ABF results (after all Stage 3)
+sbatch scripts/stage4_aggregate.sh KNEE
+
+# Stage 5 — SuSiE fine-mapping, one job per tissue (after Stage 4)
+sbatch scripts/stage5_susie.sh KNEE high_grade_cartilage
+sbatch scripts/stage5_susie.sh KNEE synovium
+sbatch scripts/stage5_susie.sh KNEE low_grade_cartilage
+sbatch scripts/stage5_susie.sh KNEE fat_pad
+
+# Stage 7 — Combine ABF + SuSiE (after all Stage 5)
+sbatch scripts/stage7_combine.sh KNEE
 ```
 
-### Force Rerun Specific Stages
+### 3. Check status
+
 ```bash
-# Rerun Stage 3 for all tissues
-snakemake --forcerun run_coloc_abf --cores 8
-
-# Rerun specific trait-tissue combination
-snakemake results/coloc_abf/KNEE.high_grade_cartilage.colocABF_results.txt --forcerun
+squeue -u $USER
+tail -f results/logs/coloc_abf_KNEE.high_grade_cartilage.log
 ```
 
-## Configuration
+---
 
-Edit `config.yaml` to specify:
-- Input file paths (GWAS, QTL, annotations)
-- Traits and tissues to analyze
-- Sample sizes
-- Analysis parameters (window size, thresholds)
+## Repository Structure
+
+```
+coloc-pipeline/
+├── config.yaml                  # All paths and parameters
+├── Snakefile                    # Main Snakemake entry point
+├── workflow/
+│   ├── rules/                   # Per-stage Snakemake rules
+│   └── scripts/                 # R analysis scripts
+│       ├── 1_convert_gwas_to_vcf.R
+│       ├── 2_find_qtl_gwas_overlaps.R
+│       ├── 3_run_coloc_abf.R
+│       ├── 4_run_coloc_susie.R
+│       ├── 5_postprocess_coloc.R
+│       ├── 7_combine_results.R
+│       └── Coloc_helper_functions.R
+├── scripts/                     # SLURM submission wrappers
+│   ├── stage1_gwas_vcf.sh
+│   ├── stage2_overlaps.sh
+│   ├── stage3_coloc_abf.sh
+│   ├── stage4_aggregate.sh
+│   ├── stage5_susie.sh
+│   └── stage7_combine.sh
+├── tests/                       # Unit and integration tests
+├── envs/                        # Conda environment definitions
+└── markdown/
+    ├── PIPELINE_GUIDE.md        # Detailed operational guide
+    └── PIPELINE_STATUS.md       # Production run status
+```
+
+---
 
 ## Output Structure
 
 ```
 results/
-├── gwas_vcf/              # Stage 1: Converted GWAS VCFs
-├── overlaps/              # Stage 2: QTL-GWAS overlaps
-├── coloc_abf/             # Stage 3: Coloc ABF results
-├── coloc_susie/           # Stage 4: Coloc SuSiE results
-├── results/               # Stage 5: Aggregated results
-├── plots/                 # Stage 6: Visualizations
-└── logs/                  # Execution logs
+├── gwas_vcf/          # Stage 1: {trait}_hg38.vcf.bgz
+├── overlaps/          # Stage 2: {trait}.{tissue}.overlaps.rda / gwas_data.rda
+├── coloc_abf/         # Stage 3: {trait}.{tissue}.colocABF_results.txt
+├── coloc_susie/       # Stage 5: {trait}.{tissue}.colocSuSiE_results.txt
+├── results/           # Stages 4 & 7: aggregated and combined outputs
+└── logs/              # Per-stage logs
 ```
 
-## Checkpoint System
+---
 
-The pipeline implements automatic checkpoints through Snakemake's DAG (Directed Acyclic Graph):
+## Key Parameters
 
-- **Output-based**: Each stage produces output files that serve as checkpoints
-- **Timestamp tracking**: Snakemake compares input/output file timestamps
-- **Automatic skip**: Completed stages with up-to-date outputs are skipped
-- **Dependency tracking**: Stages run only when dependencies are satisfied
-- **Parallelization**: Independent jobs (different tissues) run in parallel
+| Parameter | Value |
+|-----------|-------|
+| Window size | ±1 Mb around GWAS signal |
+| ABF strong threshold | PP4 ≥ 0.8 |
+| ABF moderate threshold | PP4 > 0.6 AND PP4/PP3 > 2 |
+| SuSiE candidate threshold | PP4 > 0.25 (from ABF) |
+| Prior p12 | 1×10⁻⁵ |
+| SuSiE coverage | 0.95 |
+| SuSiE max signals (L) | 5 |
+| overlap.min | 0 (disabled) |
 
-### How It Works
+---
 
-1. **First run**: Executes all stages from scratch
-2. **Interrupted run**: Resume picks up where it left off
-3. **File modified**: Only affected downstream stages rerun
-4. **Forced rerun**: Use `--forcerun` to override checkpoints
+## Tests
 
-## Troubleshooting
-
-### View logs
 ```bash
-# Latest Snakemake log
-ls -t logs/snakemake_*.out | head -1 | xargs tail
+# Activate the Snakemake-managed conda env
+RSCRIPT=$(find .snakemake/conda -name "Rscript" -path "*/bin/Rscript" | head -1)
 
-# Specific stage log
-tail results/logs/coloc_abf_KNEE.high_grade_cartilage.log
+${RSCRIPT} tests/test_stage1.R   # 13/13
+${RSCRIPT} tests/test_stage2.R   # 16/16
+${RSCRIPT} tests/test_stage3.R   # 5/5
+${RSCRIPT} tests/test_stage4.R   # 12/12
 ```
 
-### Clear incomplete runs
-```bash
-snakemake --cleanup-metadata
-```
+---
 
-### Reset specific stages
-```bash
-rm results/overlaps/*.rda  # Remove Stage 2 outputs
-sbatch submit_pipeline.sh  # Rerun from Stage 2
-```
+## Documentation
 
-(C) ITG 2026
+- [PIPELINE_GUIDE.md](markdown/PIPELINE_GUIDE.md) — full operational reference, debugging tips, known issues
+- [PIPELINE_STATUS.md](markdown/PIPELINE_STATUS.md) — production run history and results
+
+---
+
+© ITG / Zeggini Lab, Helmholtz Munich, 2026
