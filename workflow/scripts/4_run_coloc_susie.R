@@ -67,11 +67,16 @@ compute_ld_matrix <- function(snp_df, chr, fname, bfile, ld_dir, plink_bin) {
     as.matrix(read.table(paste0(f_ld, ".ld"), header = FALSE)),
     error = function(e) NULL
   )
+  # Clean up plink temp files immediately after reading to save disk space
+  unlink(c(f_ref, f_ext,
+           paste0(f_ld, ".ld"), paste0(f_ld, ".bim"),
+           paste0(f_ld, ".log"), paste0(f_ld, ".nosex")))
   if (is.null(ld)) return(NULL)
 
   ld[is.nan(ld) | is.na(ld)] <- 0  # plink writes nan for monomorphic variants
   diag(ld) <- 1                     # ensure self-correlation is always 1
 
+  if (nrow(ld) != nrow(bim)) return(NULL)  # dimension mismatch (plink excluded variants)
   colnames(ld) <- bim$rsid
   rownames(ld) <- bim$rsid
 
@@ -157,6 +162,11 @@ compute_gwas_ld_region <- function(gwas_dt, chr, bp_start, bp_end,
     as.matrix(read.table(paste0(f_ld, ".ld"), header = FALSE)),
     error = function(e) NULL
   )
+  # Clean up plink temp files immediately after reading to save disk space
+  unlink(c(f_ext,
+           paste0(f_bim_tmp, ".bim"), paste0(f_bim_tmp, ".log"), paste0(f_bim_tmp, ".nosex"),
+           paste0(f_ld, ".ld"), paste0(f_ld, ".bim"),
+           paste0(f_ld, ".log"), paste0(f_ld, ".nosex")))
   if (is.null(ld)) return(NULL)
 
   ld[is.nan(ld) | is.na(ld)] <- 0  # plink writes nan for monomorphic variants

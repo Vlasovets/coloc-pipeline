@@ -90,10 +90,11 @@ main() {
     log_info "Unlocking Snakemake directory..."
     snakemake --unlock || log_info "Directory already unlocked or no lock present"
     
-    # Build target list
+    # Build target list (include gwas_data.rda to force rerun if missing)
     TARGETS=""
     for tissue in ${TISSUES}; do
         TARGETS="${TARGETS} ${OUTPUT_DIR}/overlaps/${TRAIT}.${tissue}.overlaps.rda"
+        TARGETS="${TARGETS} ${OUTPUT_DIR}/overlaps/${TRAIT}.${tissue}.gwas_data.rda"
     done
     
     # Build snakemake command
