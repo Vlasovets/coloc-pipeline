@@ -17,6 +17,11 @@
 export TMPDIR=/localscratch/${USER}
 mkdir -p $TMPDIR
 
+# Matplotlib and some Python libraries try to write to ~/.config by default.
+# Keep those caches on writable scratch to avoid read-only home failures.
+export MPLCONFIGDIR="${TMPDIR}/matplotlib"
+mkdir -p "${MPLCONFIGDIR}"
+
 # Clean up local scratch on exit
 trap "rm -rf $TMPDIR/*" EXIT
 

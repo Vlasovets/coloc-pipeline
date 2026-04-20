@@ -49,6 +49,7 @@ workflow/rules/test.smk
 # Local-only Markdown Docs (tracked selectively below)
 # ============================================
 markdown/*
+CLAUDE.md
 !markdown/PIPELINE_GUIDE.md
 !markdown/PIPELINE_STATUS.md
 !markdown/REPO_AUDIT.md

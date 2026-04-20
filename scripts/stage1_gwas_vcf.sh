@@ -14,11 +14,15 @@
 ################################################################################
 
 # Use local scratch for temporary files (faster I/O)
-export TMPDIR=/localscratch/${USER}
-mkdir -p $TMPDIR
+if [[ -d "/localscratch/${USER}" ]] || mkdir -p "/localscratch/${USER}" 2>/dev/null; then
+    export TMPDIR="/localscratch/${USER}"
+else
+    export TMPDIR="/tmp/${USER}"
+fi
+mkdir -p "${TMPDIR}"
 
 # Clean up local scratch on exit
-trap "rm -rf $TMPDIR/*" EXIT
+trap 'rm -rf "${TMPDIR}"/*' EXIT
 
 set -euo pipefail  # Exit on error, undefined vars, pipe failures
 
